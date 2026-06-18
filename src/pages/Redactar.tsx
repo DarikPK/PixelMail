@@ -54,12 +54,14 @@ const Redactar = () => {
     setSending(true);
     setError('');
 
+    const finalMessage = addSignature ? `${message}\n\n--\n${signature}` : message;
+
     try {
-      const finalMessage = addSignature ? `${message}\n\n--\n${signature}` : message;
-
-      // Llamar a la Firebase Function
+      // 1. Obtener Token
       const idToken = await user.getIdToken();
+      console.log('[RESEND] token OK');
 
+      // 2. Enviar Correo
       console.log('[RESEND] sending');
       const response = await fetch('https://sendemail-n6id7m67ba-uc.a.run.app', {
         method: 'POST',
@@ -74,11 +76,15 @@ const Redactar = () => {
         })
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Error al enviar el correo');
+        throw new Error(responseData.error || 'Error al enviar el correo');
       }
 
+      console.log('[RESEND] sent OK');
+
+      // 3. Guardar en Firestore
       await addDoc(collection(db, 'emails'), {
         userId: user.uid,
         from: user.email,
@@ -89,20 +95,19 @@ const Redactar = () => {
         status: 'sent',
         createdAt: serverTimestamp()
       });
+      console.log('[FIRESTORE] email saved');
 
-      console.log('[RESEND] sent OK');
       setSuccess(true);
       setTo('');
       setSubject('');
       setMessage('');
     } catch (err: any) {
-      console.error("Error al enviar correo:", err);
+      console.error("Error en el proceso de envío:", err);
       console.log('[RESEND] send error');
       setError(err.message || 'Error al enviar el correo.');
 
       // Guardar el error en Firestore
       try {
-        const finalMessage = addSignature ? `${message}\n\n--\n${signature}` : message;
         await addDoc(collection(db, 'emails'), {
           userId: user.uid,
           from: user.email,
@@ -114,6 +119,7 @@ const Redactar = () => {
           createdAt: serverTimestamp(),
           errorMessage: err.message
         });
+        console.log('[FIRESTORE] email saved');
       } catch (fsErr) {
         console.error("Error al guardar registro de fallo en Firestore:", fsErr);
       }

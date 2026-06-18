@@ -24,35 +24,36 @@ exports.sendEmail = onRequest(async (req, res) => {
 
   // 1. Manejar OPTIONS
   if (req.method === "OPTIONS") {
+    logger.log("[CORS] preflight OK");
     return res.status(204).send("");
   }
 
   // 2. Validar método
   if (req.method !== "POST") {
-    return res.status(405).send("Method Not Allowed");
+    return res.status(405).json({ error: "Method Not Allowed" });
   }
 
   // 3. Validar autenticación
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    logger.error("No se proporcionó token de autenticación");
-    return res.status(401).send("Unauthorized");
+    logger.error("[AUTH] no token");
+    return res.status(401).json({ error: "Unauthorized: No token provided" });
   }
 
   const idToken = authHeader.split("Bearer ")[1];
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
-    logger.log("Usuario autenticado:", decodedToken.email);
+    logger.log("[AUTH] token OK", decodedToken.email);
   } catch (error) {
-    logger.error("Error al verificar token:", error);
-    return res.status(401).send("Unauthorized");
+    logger.error("[AUTH] invalid token", error);
+    return res.status(401).json({ error: "Unauthorized: Invalid token" });
   }
 
   // 4. Recibir parámetros
   const { to, subject, body } = req.body;
 
   if (!to || !subject || !body) {
-    return res.status(400).send("Faltan parámetros requeridos: to, subject, body");
+    return res.status(400).json({ error: "Faltan parámetros requeridos: to, subject, body" });
   }
 
   try {
@@ -67,14 +68,14 @@ exports.sendEmail = onRequest(async (req, res) => {
     });
 
     if (error) {
-      logger.error("[RESEND] send error", error);
+      logger.error("[RESEND] error", error);
       return res.status(500).json({ error: error.message });
     }
 
     logger.log("[RESEND] sent OK", data.id);
     return res.status(200).json({ success: true, id: data.id });
   } catch (error) {
-    logger.error("[RESEND] send error", error);
+    logger.error("[RESEND] error", error);
     return res.status(500).json({ error: error.message });
   }
 });

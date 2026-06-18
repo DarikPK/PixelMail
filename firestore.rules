@@ -7,17 +7,16 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Regla para la colección de configuración (settings): userId debe coincidir con uid del auth
-    match /settings/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Regla para la colección de configuración (settings): solo documentos donde userId == uid del auth
+    match /settings/{docId} {
+      allow read, write: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
 
-    // Regla para la colección de correos (emails):
-    // El usuario debe estar autenticado y su uid debe coincidir con el campo userId del documento
-    match /emails/{emailId} {
+    // Regla para la colección de correos (emails): solo documentos donde userId == uid del auth
+    match /emails/{docId} {
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid);
+      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
   }
 }
