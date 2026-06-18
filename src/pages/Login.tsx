@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -17,8 +17,15 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
+
+  // Redirigir si el usuario ya está autenticado o acaba de autenticarse
+  useEffect(() => {
+    if (user) {
+      navigate('/redactar', { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,11 +33,10 @@ const Login = () => {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/redactar');
+      // La redirección se maneja en el useEffect al detectar el cambio en 'user'
     } catch (err: any) {
       console.error(err);
       setError('Error al iniciar sesión. Verifica tus credenciales.');
-    } finally {
       setLoading(false);
     }
   };
