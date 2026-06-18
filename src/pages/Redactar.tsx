@@ -29,14 +29,21 @@ const Redactar = () => {
   useEffect(() => {
     const fetchSignature = async () => {
       if (!user) return;
+      const path = `settings/${user.uid}`;
+      console.log(`[SIGNATURE] loading path ${path}`);
       try {
         const docRef = doc(db, 'settings', user.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           setSignature(docSnap.data().signature);
         }
-      } catch (error) {
-        console.error("Error fetching signature:", error);
+        console.log('[SIGNATURE] loaded OK');
+      } catch (error: any) {
+        if (error.code === 'permission-denied') {
+          console.error(`[SIGNATURE] permission error ${path}`);
+        } else {
+          console.error("Error fetching signature:", error);
+        }
       }
     };
     fetchSignature();
