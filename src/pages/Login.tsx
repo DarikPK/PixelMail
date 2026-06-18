@@ -6,24 +6,32 @@ import {
   Typography,
   Paper,
   Container,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (login(username, password)) {
+    setError('');
+    setLoading(true);
+    try {
+      await login(email, password);
       navigate('/redactar');
-    } else {
-      setError('Usuario o contraseña incorrectos');
+    } catch (err: any) {
+      console.error(err);
+      setError('Error al iniciar sesión. Verifica tus credenciales.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -52,13 +60,14 @@ const Login = () => {
               margin="normal"
               required
               fullWidth
-              id="username"
-              label="Usuario"
-              name="username"
-              autoComplete="username"
+              id="email"
+              label="Correo Electrónico"
+              name="email"
+              autoComplete="email"
               autoFocus
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
             />
             <TextField
               margin="normal"
@@ -71,14 +80,16 @@ const Login = () => {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
             />
             <Button
               type="submit"
               fullWidth
               variant="contained"
               sx={{ mt: 3, mb: 2, py: 1.5 }}
+              disabled={loading}
             >
-              Entrar
+              {loading ? <CircularProgress size={24} /> : 'Entrar'}
             </Button>
           </Box>
         </Paper>

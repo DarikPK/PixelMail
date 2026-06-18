@@ -8,18 +8,57 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Chip
+  Chip,
+  CircularProgress
 } from '@mui/material';
 import { useEffect, useState } from 'react';
-import type { Email } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { db } from '../config/firebase';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+
+interface EmailData {
+  id: string;
+  to: string;
+  subject: string;
+  status: string;
+  createdAt: any;
+}
 
 const Enviados = () => {
-  const [emails, setEmails] = useState<Email[]>([]);
+  const { user } = useAuth();
+  const [emails, setEmails] = useState<EmailData[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedEmails = JSON.parse(localStorage.getItem('pixel_mail_sent') || '[]');
-    setEmails(savedEmails);
-  }, []);
+    if (!user) return;
+
+    const q = query(
+      collection(db, 'emails'),
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const emailsData: EmailData[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        emailsData.push({
+          id: doc.id,
+          to: data.to,
+          subject: data.subject,
+          status: data.status,
+          createdAt: data.createdAt?.toDate() || new Date(),
+        });
+      });
+      setEmails(emailsData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching emails:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   return (
     <Box>
@@ -38,7 +77,13 @@ const Enviados = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {emails.length === 0 ? (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                  <CircularProgress size={24} />
+                </TableCell>
+              </TableRow>
+            ) : emails.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
                   <Typography variant="body1" color="text.secondary">
@@ -51,10 +96,10 @@ const Enviados = () => {
                 <TableRow key={email.id} hover>
                   <TableCell>{email.to}</TableCell>
                   <TableCell>{email.subject}</TableCell>
-                  <TableCell>{email.date}</TableCell>
+                  <TableCell>{email.createdAt.toLocaleString()}</TableCell>
                   <TableCell>
                     <Chip
-                      label={email.status}
+                      label={email.status === 'draft_sent_simulated' ? 'Simulado' : email.status}
                       color="info"
                       size="small"
                       variant="outlined"

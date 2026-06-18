@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -8,46 +8,74 @@ import {
   Switch,
   FormControlLabel,
   Alert,
-  Snackbar
+  Snackbar,
+  CircularProgress
 } from '@mui/material';
-import type { Email } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { db } from '../config/firebase';
+import { collection, addDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 const Redactar = () => {
+  const { user } = useAuth();
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [addSignature, setAddSignature] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [signature, setSignature] = useState('Saludos,\nDavid Lachira\nPixel');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const fetchSignature = async () => {
+      if (!user) return;
+      try {
+        const docRef = doc(db, 'settings', user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setSignature(docSnap.data().signature);
+        }
+      } catch (error) {
+        console.error("Error fetching signature:", error);
+      }
+    };
+    fetchSignature();
+  }, [user]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+
     if (!to || !subject || !message) {
       setError('Todos los campos son obligatorios');
       return;
     }
 
-    const signature = localStorage.getItem('pixel_mail_signature') || 'Saludos,\nDavid Lachira\nPixel';
-    const finalMessage = addSignature ? `${message}\n\n--\n${signature}` : message;
-
-    const newEmail: Email = {
-      id: Date.now().toString(),
-      to,
-      subject,
-      message: finalMessage,
-      date: new Date().toLocaleString(),
-      status: 'Simulado'
-    };
-
-    // Guardar en estado local (simulado con localStorage para persistencia básica en la demo)
-    const existingEmails = JSON.parse(localStorage.getItem('pixel_mail_sent') || '[]');
-    localStorage.setItem('pixel_mail_sent', JSON.stringify([newEmail, ...existingEmails]));
-
-    setSuccess(true);
-    setTo('');
-    setSubject('');
-    setMessage('');
+    setSending(true);
     setError('');
+
+    try {
+      const finalMessage = addSignature ? `${message}\n\n--\n${signature}` : message;
+
+      await addDoc(collection(db, 'emails'), {
+        userId: user.uid,
+        to,
+        subject,
+        body: finalMessage,
+        status: 'draft_sent_simulated',
+        createdAt: serverTimestamp()
+      });
+
+      setSuccess(true);
+      setTo('');
+      setSubject('');
+      setMessage('');
+    } catch (err) {
+      console.error("Error al guardar correo:", err);
+      setError('Error al enviar el correo simulado.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -62,7 +90,7 @@ const Redactar = () => {
         <TextField
           fullWidth
           label="De"
-          value="David Lachira <david.lachira@pixel.com.pe>"
+          value={user?.email || "Cargando..."}
           disabled
           margin="normal"
           variant="filled"
@@ -76,6 +104,7 @@ const Redactar = () => {
           onChange={(e) => setTo(e.target.value)}
           margin="normal"
           required
+          disabled={sending}
         />
 
         <TextField
@@ -85,6 +114,7 @@ const Redactar = () => {
           onChange={(e) => setSubject(e.target.value)}
           margin="normal"
           required
+          disabled={sending}
         />
 
         <TextField
@@ -96,6 +126,7 @@ const Redactar = () => {
           onChange={(e) => setMessage(e.target.value)}
           margin="normal"
           required
+          disabled={sending}
         />
 
         <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
@@ -105,6 +136,7 @@ const Redactar = () => {
                 checked={addSignature}
                 onChange={(e) => setAddSignature(e.target.checked)}
                 color="primary"
+                disabled={sending}
               />
             }
             label="Agregar firma"
@@ -115,8 +147,9 @@ const Redactar = () => {
             variant="contained"
             size="large"
             sx={{ minWidth: 150 }}
+            disabled={sending}
           >
-            Enviar
+            {sending ? <CircularProgress size={24} color="inherit" /> : 'Enviar'}
           </Button>
         </Box>
       </Paper>
