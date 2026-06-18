@@ -19,7 +19,7 @@
   },
   "functions": [
     {
-      "source": "functions",
+      "source": "mailapi",
       "codebase": "default",
       "ignore": [
         "node_modules",

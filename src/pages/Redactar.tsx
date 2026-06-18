@@ -57,6 +57,28 @@ const Redactar = () => {
     try {
       const finalMessage = addSignature ? `${message}\n\n--\n${signature}` : message;
 
+      // Llamar a la Firebase Function
+      const idToken = await user.getIdToken();
+
+      console.log('[RESEND] sending');
+      const response = await fetch('https://sendemail-n6id7m67ba-uc.a.run.app', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          to,
+          subject,
+          body: finalMessage
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Error al enviar el correo');
+      }
+
       await addDoc(collection(db, 'emails'), {
         userId: user.uid,
         from: user.email,
@@ -64,18 +86,37 @@ const Redactar = () => {
         subject,
         body: finalMessage,
         signatureApplied: addSignature,
-        status: 'simulated',
+        status: 'sent',
         createdAt: serverTimestamp()
       });
 
-      console.log('[FIRESTORE] email simulated saved');
+      console.log('[RESEND] sent OK');
       setSuccess(true);
       setTo('');
       setSubject('');
       setMessage('');
-    } catch (err) {
-      console.error("Error al guardar correo:", err);
-      setError('Error al enviar el correo simulado.');
+    } catch (err: any) {
+      console.error("Error al enviar correo:", err);
+      console.log('[RESEND] send error');
+      setError(err.message || 'Error al enviar el correo.');
+
+      // Guardar el error en Firestore
+      try {
+        const finalMessage = addSignature ? `${message}\n\n--\n${signature}` : message;
+        await addDoc(collection(db, 'emails'), {
+          userId: user.uid,
+          from: user.email,
+          to,
+          subject,
+          body: finalMessage,
+          signatureApplied: addSignature,
+          status: 'failed',
+          createdAt: serverTimestamp(),
+          errorMessage: err.message
+        });
+      } catch (fsErr) {
+        console.error("Error al guardar registro de fallo en Firestore:", fsErr);
+      }
     } finally {
       setSending(false);
     }
@@ -164,7 +205,7 @@ const Redactar = () => {
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert onClose={() => setSuccess(false)} severity="success" sx={{ width: '100%' }}>
-          Correo enviado con éxito (Simulado)
+          Correo enviado con éxito
         </Alert>
       </Snackbar>
     </Box>

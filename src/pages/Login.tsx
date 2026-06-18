@@ -59,8 +59,11 @@ const Login = () => {
           <Typography component="h1" variant="h5" align="center" gutterBottom sx={{ fontWeight: 'bold' }}>
             PixelMail
           </Typography>
-          <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
+          <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 1 }}>
             Inicia sesión para continuar
+          </Typography>
+          <Typography variant="caption" align="center" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+            versión 2.1
           </Typography>
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
