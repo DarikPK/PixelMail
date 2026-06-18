@@ -8,13 +8,31 @@ admin.initializeApp();
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-exports.sendEmail = onRequest({ cors: true }, async (req, res) => {
-  // 1. Validar método
+exports.sendEmail = onRequest(async (req, res) => {
+  const allowedOrigins = [
+    "http://localhost:5173",
+    "https://mail.pixel.com.pe"
+  ];
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  // 1. Manejar OPTIONS
+  if (req.method === "OPTIONS") {
+    return res.status(204).send("");
+  }
+
+  // 2. Validar método
   if (req.method !== "POST") {
     return res.status(405).send("Method Not Allowed");
   }
 
-  // 2. Validar autenticación
+  // 3. Validar autenticación
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     logger.error("No se proporcionó token de autenticación");
@@ -30,7 +48,7 @@ exports.sendEmail = onRequest({ cors: true }, async (req, res) => {
     return res.status(401).send("Unauthorized");
   }
 
-  // 3. Recibir parámetros
+  // 4. Recibir parámetros
   const { to, subject, body } = req.body;
 
   if (!to || !subject || !body) {

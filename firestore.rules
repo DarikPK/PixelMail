@@ -17,7 +17,7 @@ service cloud.firestore {
     match /emails/{emailId} {
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid);
     }
   }
 }
