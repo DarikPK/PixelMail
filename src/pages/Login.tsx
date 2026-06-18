@@ -16,30 +16,34 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login, user } = useAuth();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const { login, user, loading } = useAuth();
   const navigate = useNavigate();
 
   // Redirigir si el usuario ya está autenticado o acaba de autenticarse
   useEffect(() => {
-    if (user) {
+    if (!loading && user) {
       navigate('/redactar', { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, loading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoggingIn) return;
+
     setError('');
-    setLoading(true);
+    setIsLoggingIn(true);
     try {
       await login(email, password);
-      // La redirección se maneja en el useEffect al detectar el cambio en 'user'
+      // La redirección se maneja en el useEffect
     } catch (err: any) {
       console.error(err);
       setError('Error al iniciar sesión. Verifica tus credenciales.');
-      setLoading(false);
+      setIsLoggingIn(false);
     }
   };
+
+  const showLoading = loading || isLoggingIn;
 
   return (
     <Container component="main" maxWidth="xs">
@@ -73,7 +77,7 @@ const Login = () => {
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              disabled={loading}
+              disabled={showLoading}
             />
             <TextField
               margin="normal"
@@ -86,16 +90,16 @@ const Login = () => {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
+              disabled={showLoading}
             />
             <Button
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2, py: 1.5 }}
-              disabled={loading}
+              sx={{ mt: 3, mb: 2, py: 1.5, position: 'relative' }}
+              disabled={showLoading}
             >
-              {loading ? <CircularProgress size={24} /> : 'Entrar'}
+              {showLoading ? <CircularProgress size={24} /> : 'Entrar'}
             </Button>
           </Box>
         </Paper>

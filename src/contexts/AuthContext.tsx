@@ -22,27 +22,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Verificar si el usuario existe en la colección 'users'
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
+  const checkAndCreateUser = async (firebaseUser: User) => {
+    try {
+      const userDocRef = doc(db, 'users', firebaseUser.uid);
+      const userDoc = await getDoc(userDocRef);
 
-        if (!userDoc.exists()) {
-          // Crear usuario si no existe
-          await setDoc(userDocRef, {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuario',
-            createdAt: serverTimestamp()
-          });
-        }
-        setUser(firebaseUser);
-      } else {
-        setUser(null);
+      if (!userDoc.exists()) {
+        await setDoc(userDocRef, {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuario',
+          createdAt: serverTimestamp()
+        });
       }
+    } catch (error) {
+      console.error("Error al verificar/crear usuario en Firestore:", error);
+      // No bloqueamos el acceso si falla Firestore, ya que el usuario está autenticado en Auth
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
       setLoading(false);
+
+      if (firebaseUser) {
+        checkAndCreateUser(firebaseUser);
+      }
     });
 
     return () => unsubscribe();
@@ -58,7 +64,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout }}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };
