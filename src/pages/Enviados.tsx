@@ -52,6 +52,7 @@ const Enviados = () => {
       });
       setEmails(emailsData);
       setLoading(false);
+      console.log('[FIRESTORE] emails loaded');
     }, (error) => {
       console.error("Error fetching emails:", error);
       setLoading(false);
@@ -99,7 +100,7 @@ const Enviados = () => {
                   <TableCell>{email.createdAt.toLocaleString()}</TableCell>
                   <TableCell>
                     <Chip
-                      label={email.status === 'draft_sent_simulated' ? 'Simulado' : email.status}
+                      label={email.status === 'simulated' ? 'Simulado' : email.status}
                       color="info"
                       size="small"
                       variant="outlined"

@@ -59,13 +59,16 @@ const Redactar = () => {
 
       await addDoc(collection(db, 'emails'), {
         userId: user.uid,
+        from: user.email,
         to,
         subject,
         body: finalMessage,
-        status: 'draft_sent_simulated',
+        signatureApplied: addSignature,
+        status: 'simulated',
         createdAt: serverTimestamp()
       });
 
+      console.log('[FIRESTORE] email simulated saved');
       setSuccess(true);
       setTo('');
       setSubject('');

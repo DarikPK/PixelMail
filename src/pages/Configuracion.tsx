@@ -31,6 +31,7 @@ const Configuracion = () => {
         } else {
           setSignature(defaultSignature);
         }
+        console.log('[FIRESTORE] settings loaded');
       } catch (error) {
         console.error("Error al obtener la firma:", error);
         setSignature(defaultSignature);
@@ -52,6 +53,7 @@ const Configuracion = () => {
         signature: signature,
         updatedAt: serverTimestamp()
       });
+      console.log('[FIRESTORE] signature saved');
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
