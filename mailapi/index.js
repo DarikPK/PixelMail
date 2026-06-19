@@ -2,21 +2,21 @@ const { onRequest } = require("firebase-functions/v2/https");
 const { logger } = require("firebase-functions");
 const { Resend } = require("resend");
 const admin = require("firebase-admin");
-require("dotenv").config();
 
 admin.initializeApp();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-exports.sendEmail = onRequest(async (req, res) => {
+exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) => {
   const allowedOrigins = [
     "http://localhost:5173",
+    "https://pixel-mail-a78f6.web.app",
+    "https://pixel-mail-a78f6.firebaseapp.com",
     "https://mail.pixel.com.pe"
   ];
   const origin = req.headers.origin;
 
   if (allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
+    logger.log("[CORS] origin", origin);
   }
 
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -24,7 +24,6 @@ exports.sendEmail = onRequest(async (req, res) => {
 
   // 1. Manejar OPTIONS
   if (req.method === "OPTIONS") {
-    logger.log("[CORS] preflight OK");
     return res.status(204).send("");
   }
 
@@ -36,25 +35,26 @@ exports.sendEmail = onRequest(async (req, res) => {
   // 3. Validar autenticación
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    logger.error("[AUTH] no token");
-    return res.status(401).json({ error: "Unauthorized: No token provided" });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   const idToken = authHeader.split("Bearer ")[1];
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
-    logger.log("[AUTH] token OK", decodedToken.email);
+    logger.log("[AUTH] token verified", decodedToken.email);
   } catch (error) {
-    logger.error("[AUTH] invalid token", error);
-    return res.status(401).json({ error: "Unauthorized: Invalid token" });
+    logger.error("[AUTH] error", error);
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   // 4. Recibir parámetros
   const { to, subject, body } = req.body;
-
   if (!to || !subject || !body) {
-    return res.status(400).json({ error: "Faltan parámetros requeridos: to, subject, body" });
+    return res.status(400).json({ error: "Missing parameters" });
   }
+
+  // 5. Enviar usando Resend
+  const resend = new Resend(process.env.RESEND_API_KEY);
 
   try {
     logger.log("[RESEND] sending");
@@ -72,7 +72,7 @@ exports.sendEmail = onRequest(async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    logger.log("[RESEND] sent OK", data.id);
+    logger.log("[RESEND] success", data.id);
     return res.status(200).json({ success: true, id: data.id });
   } catch (error) {
     logger.error("[RESEND] error", error);

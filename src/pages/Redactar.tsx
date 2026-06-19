@@ -66,9 +66,8 @@ const Redactar = () => {
     try {
       // 1. Obtener Token
       const idToken = await user.getIdToken();
-      console.log('[RESEND] token OK');
 
-      // 2. Enviar Correo
+      // 2. Enviar Correo mediante Function
       console.log('[RESEND] sending');
       const response = await fetch('https://sendemail-n6id7m67ba-uc.a.run.app', {
         method: 'POST',
@@ -86,12 +85,13 @@ const Redactar = () => {
       const responseData = await response.json();
 
       if (!response.ok) {
+        console.log('[RESEND] error');
         throw new Error(responseData.error || 'Error al enviar el correo');
       }
 
-      console.log('[RESEND] sent OK');
+      console.log('[RESEND] success');
 
-      // 3. Guardar en Firestore
+      // 3. Solo si Resend tuvo éxito, guardar en Firestore
       await addDoc(collection(db, 'emails'), {
         userId: user.uid,
         from: user.email,
@@ -109,27 +109,8 @@ const Redactar = () => {
       setSubject('');
       setMessage('');
     } catch (err: any) {
-      console.error("Error en el proceso de envío:", err);
-      console.log('[RESEND] send error');
+      console.error("Error en el envío:", err);
       setError(err.message || 'Error al enviar el correo.');
-
-      // Guardar el error en Firestore
-      try {
-        await addDoc(collection(db, 'emails'), {
-          userId: user.uid,
-          from: user.email,
-          to,
-          subject,
-          body: finalMessage,
-          signatureApplied: addSignature,
-          status: 'failed',
-          createdAt: serverTimestamp(),
-          errorMessage: err.message
-        });
-        console.log('[FIRESTORE] email saved');
-      } catch (fsErr) {
-        console.error("Error al guardar registro de fallo en Firestore:", fsErr);
-      }
     } finally {
       setSending(false);
     }
