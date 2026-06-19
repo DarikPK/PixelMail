@@ -67,9 +67,14 @@ const Redactar = () => {
       // 1. Obtener Token
       const idToken = await user.getIdToken();
 
+      const functionUrl = import.meta.env.VITE_SEND_EMAIL_URL;
+      if (!functionUrl) {
+        throw new Error("VITE_SEND_EMAIL_URL no configurada");
+      }
+
       // 2. Enviar Correo mediante Function
       console.log('[RESEND] sending');
-      const response = await fetch('https://sendemail-n6id7m67ba-uc.a.run.app', {
+      const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
