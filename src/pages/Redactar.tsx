@@ -9,18 +9,26 @@ import {
   FormControlLabel,
   Alert,
   Snackbar,
-  CircularProgress
+  CircularProgress,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
+import Editor from '../components/Editor';
+import AttachmentManager from '../components/AttachmentManager';
 import { db } from '../config/firebase';
 import { collection, addDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 const Redactar = () => {
   const { user } = useAuth();
   const [to, setTo] = useState('');
+  const [cc, setCc] = useState('');
+  const [bcc, setBcc] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [attachments, setAttachments] = useState<any[]>([]);
   const [addSignature, setAddSignature] = useState(true);
+  const [tabValue, setTabValue] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [sending, setSending] = useState(false);
@@ -61,7 +69,7 @@ const Redactar = () => {
     setSending(true);
     setError('');
 
-    const finalMessage = addSignature ? `${message}\n\n--\n${signature}` : message;
+    const finalMessage = addSignature ? `${message}<br><br>--<br>${signature}` : message;
 
     try {
       // 1. Obtener Token
@@ -82,8 +90,10 @@ const Redactar = () => {
         },
         body: JSON.stringify({
           to,
+          cc: cc || undefined,
+          bcc: bcc || undefined,
           subject,
-          body: finalMessage
+          html: finalMessage
         })
       });
 
@@ -101,10 +111,13 @@ const Redactar = () => {
         userId: user.uid,
         from: user.email,
         to,
+        cc: cc || null,
+        bcc: bcc || null,
         subject,
         body: finalMessage,
         signatureApplied: addSignature,
         status: 'sent',
+        attachments: attachments.map(f => ({ name: f.name, size: f.size })),
         createdAt: serverTimestamp()
       });
       console.log('[FIRESTORE] email saved');
@@ -150,6 +163,27 @@ const Redactar = () => {
           disabled={sending}
         />
 
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <TextField
+            fullWidth
+            label="CC"
+            placeholder="copia@correo.com"
+            value={cc}
+            onChange={(e) => setCc(e.target.value)}
+            margin="normal"
+            disabled={sending}
+          />
+          <TextField
+            fullWidth
+            label="CCO"
+            placeholder="copia-oculta@correo.com"
+            value={bcc}
+            onChange={(e) => setBcc(e.target.value)}
+            margin="normal"
+            disabled={sending}
+          />
+        </Box>
+
         <TextField
           fullWidth
           label="Asunto"
@@ -160,17 +194,39 @@ const Redactar = () => {
           disabled={sending}
         />
 
-        <TextField
-          fullWidth
-          label="Mensaje"
-          multiline
-          rows={10}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          margin="normal"
-          required
-          disabled={sending}
-        />
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+          <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
+            <Tab label="Redactar" />
+            <Tab label="Vista Previa" />
+          </Tabs>
+        </Box>
+
+        {tabValue === 0 ? (
+          <>
+            <Editor
+              content={message}
+              onChange={(html) => setMessage(html)}
+            />
+            <AttachmentManager
+              files={attachments}
+              onFilesChange={setAttachments}
+            />
+          </>
+        ) : (
+          <Box
+            sx={{
+              p: 2,
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              minHeight: 300,
+              bgcolor: '#f9f9f9',
+              mt: 2,
+              mb: 1
+            }}
+            dangerouslySetInnerHTML={{ __html: addSignature ? `${message}<br><br>--<br>${signature}` : message }}
+          />
+        )}
 
         <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
           <FormControlLabel

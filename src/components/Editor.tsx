@@ -1,0 +1,238 @@
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import Color from '@tiptap/extension-color';
+import { TextStyle } from '@tiptap/extension-text-style';
+import Highlight from '@tiptap/extension-highlight';
+import TextAlign from '@tiptap/extension-text-align';
+import FontFamily from '@tiptap/extension-font-family';
+import { FontSize } from './FontSize';
+import {
+  Box,
+  IconButton,
+  ToggleButton,
+  ToggleButtonGroup,
+  Divider,
+  Select,
+  MenuItem
+} from '@mui/material';
+import {
+  FormatBold,
+  FormatItalic,
+  FormatUnderlined,
+  FormatStrikethrough,
+  FormatListBulleted,
+  FormatListNumbered,
+  FormatAlignLeft,
+  FormatAlignCenter,
+  FormatAlignRight,
+  FormatAlignJustify,
+  Link as LinkIcon,
+  Undo,
+  Redo,
+  FormatColorFill
+} from '@mui/icons-material';
+
+interface EditorProps {
+  content: string;
+  onChange: (content: string) => void;
+}
+
+const MenuBar = ({ editor }: { editor: any }) => {
+  if (!editor) {
+    return null;
+  }
+
+  const addLink = () => {
+    const url = window.prompt('URL');
+    if (url) {
+      editor.chain().focus().setLink({ href: url }).run();
+    }
+  };
+
+  return (
+    <Box sx={{ borderBottom: 1, borderColor: 'divider', p: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+      <ToggleButtonGroup size="small">
+        <ToggleButton
+          value="bold"
+          selected={editor.isActive('bold')}
+          onClick={() => editor.chain().focus().toggleBold().run()}
+        >
+          <FormatBold fontSize="small" />
+        </ToggleButton>
+        <ToggleButton
+          value="italic"
+          selected={editor.isActive('italic')}
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+        >
+          <FormatItalic fontSize="small" />
+        </ToggleButton>
+        <ToggleButton
+          value="underline"
+          selected={editor.isActive('underline')}
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+        >
+          <FormatUnderlined fontSize="small" />
+        </ToggleButton>
+        <ToggleButton
+          value="strike"
+          selected={editor.isActive('strike')}
+          onClick={() => editor.chain().focus().toggleStrike().run()}
+        >
+          <FormatStrikethrough fontSize="small" />
+        </ToggleButton>
+      </ToggleButtonGroup>
+
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <input
+          type="color"
+          onInput={(event: any) => editor.chain().focus().setColor(event.target.value).run()}
+          value={editor.getAttributes('textStyle').color || '#000000'}
+          style={{ width: 24, height: 24, padding: 0, border: 'none', cursor: 'pointer' }}
+          title="Color de texto"
+        />
+        <IconButton size="small" onClick={() => editor.chain().focus().toggleHighlight().run()} color={editor.isActive('highlight') ? 'primary' : 'default'}>
+          <FormatColorFill fontSize="small" />
+        </IconButton>
+      </Box>
+
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+      <Select
+        size="small"
+        value={editor.getAttributes('textStyle').fontFamily || 'Inter'}
+        onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
+        sx={{ minWidth: 120, height: 32 }}
+      >
+        <MenuItem value="Inter">Predeterminado</MenuItem>
+        <MenuItem value="Arial">Arial</MenuItem>
+        <MenuItem value="Courier New">Courier New</MenuItem>
+        <MenuItem value="Georgia">Georgia</MenuItem>
+        <MenuItem value="Times New Roman">Times New Roman</MenuItem>
+        <MenuItem value="Verdana">Verdana</MenuItem>
+      </Select>
+
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+      <Select
+        size="small"
+        value={editor.getAttributes('textStyle').fontSize || '16px'}
+        onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
+        sx={{ minWidth: 80, height: 32 }}
+      >
+        <MenuItem value="12px">12px</MenuItem>
+        <MenuItem value="14px">14px</MenuItem>
+        <MenuItem value="16px">16px</MenuItem>
+        <MenuItem value="18px">18px</MenuItem>
+        <MenuItem value="20px">20px</MenuItem>
+        <MenuItem value="24px">24px</MenuItem>
+        <MenuItem value="30px">30px</MenuItem>
+      </Select>
+
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+      <ToggleButtonGroup size="small">
+        <ToggleButton
+          value="left"
+          selected={editor.isActive({ textAlign: 'left' })}
+          onClick={() => editor.chain().focus().setTextAlign('left').run()}
+        >
+          <FormatAlignLeft fontSize="small" />
+        </ToggleButton>
+        <ToggleButton
+          value="center"
+          selected={editor.isActive({ textAlign: 'center' })}
+          onClick={() => editor.chain().focus().setTextAlign('center').run()}
+        >
+          <FormatAlignCenter fontSize="small" />
+        </ToggleButton>
+        <ToggleButton
+          value="right"
+          selected={editor.isActive({ textAlign: 'right' })}
+          onClick={() => editor.chain().focus().setTextAlign('right').run()}
+        >
+          <FormatAlignRight fontSize="small" />
+        </ToggleButton>
+        <ToggleButton
+          value="justify"
+          selected={editor.isActive({ textAlign: 'justify' })}
+          onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+        >
+          <FormatAlignJustify fontSize="small" />
+        </ToggleButton>
+      </ToggleButtonGroup>
+
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+      <ToggleButtonGroup size="small">
+        <ToggleButton
+          value="bulletList"
+          selected={editor.isActive('bulletList')}
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+        >
+          <FormatListBulleted fontSize="small" />
+        </ToggleButton>
+        <ToggleButton
+          value="orderedList"
+          selected={editor.isActive('orderedList')}
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        >
+          <FormatListNumbered fontSize="small" />
+        </ToggleButton>
+      </ToggleButtonGroup>
+
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+      <IconButton size="small" onClick={addLink} color={editor.isActive('link') ? 'primary' : 'default'}>
+        <LinkIcon fontSize="small" />
+      </IconButton>
+
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+      <IconButton size="small" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()}>
+        <Undo fontSize="small" />
+      </IconButton>
+      <IconButton size="small" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()}>
+        <Redo fontSize="small" />
+      </IconButton>
+    </Box>
+  );
+};
+
+const Editor = ({ content, onChange }: EditorProps) => {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({
+        openOnClick: false,
+      }),
+      TextStyle,
+      Color,
+      Highlight.configure({ multicolor: true }),
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+      FontFamily,
+      FontSize,
+    ],
+    content: content,
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML());
+    },
+  });
+
+  return (
+    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mt: 2, mb: 1, minHeight: 300 }}>
+      <MenuBar editor={editor} />
+      <Box sx={{ p: 2, '& .ProseMirror': { outline: 'none', minHeight: 250 } }}>
+        <EditorContent editor={editor} />
+      </Box>
+    </Box>
+  );
+};
+
+export default Editor;

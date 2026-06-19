@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  TextField,
   Paper,
   Divider,
   Button,
   CircularProgress
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
+import Editor from '../components/Editor';
 import { db } from '../config/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -87,16 +87,9 @@ const Configuracion = () => {
           Editor de firma
         </Typography>
         <Divider sx={{ mb: 2 }} />
-        <TextField
-          fullWidth
-          multiline
-          rows={6}
-          variant="outlined"
-          value={signature}
-          onChange={(e) => setSignature(e.target.value)}
-          placeholder="Escribe tu firma aquí..."
-          sx={{ mb: 3 }}
-          disabled={saving}
+        <Editor
+          content={signature}
+          onChange={(html) => setSignature(html)}
         />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Button
