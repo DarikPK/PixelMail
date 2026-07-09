@@ -82,19 +82,22 @@ const Redactar = () => {
 
       // 2. Enviar Correo mediante Function
       console.log('[RESEND] sending');
+      const payload = {
+        to,
+        subject,
+        html: finalMessage,
+        cc: cc || undefined,
+        bcc: bcc || undefined,
+      };
+      console.log("[RESEND] payload", payload);
+
       const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${idToken}`
         },
-        body: JSON.stringify({
-          to,
-          cc: cc || undefined,
-          bcc: bcc || undefined,
-          subject,
-          html: finalMessage
-        })
+        body: JSON.stringify(payload)
       });
 
       const responseData = await response.json();

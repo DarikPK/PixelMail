@@ -48,9 +48,17 @@ exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) 
   }
 
   // 4. Recibir parámetros
-  const { to, subject, body } = req.body;
-  if (!to || !subject || !body) {
-    return res.status(400).json({ error: "Missing parameters" });
+  const { to, subject, html } = req.body || {};
+  if (!to || !subject || !html) {
+    return res.status(400).json({
+      error: "Missing parameters",
+      received: Object.keys(req.body || {}),
+      missing: {
+        to: !to,
+        subject: !subject,
+        html: !html,
+      },
+    });
   }
 
   // 5. Enviar usando Resend
@@ -63,7 +71,7 @@ exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) 
       from: "David Lachira <david.lachira@pixel.com.pe>",
       to: [to],
       subject: subject,
-      html: body.replace(/\n/g, '<br>'),
+      html: html.replace(/\n/g, '<br>'),
       reply_to: "david.lachira@pixel.com.pe",
     });
 
