@@ -36,6 +36,26 @@ const Redactar = () => {
   const [sending, setSending] = useState(false);
   const [signature, setSignature] = useState('Saludos,\nDavid Lachira\nPixel');
 
+  const handleToChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setTo(event.target.value);
+  };
+
+  const handleCcChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setCc(event.target.value);
+  };
+
+  const handleBccChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setBcc(event.target.value);
+  };
+
+  useEffect(() => {
+    console.log("[PIXEL MAIL RECIPIENTS]", {
+      to,
+      cc,
+      bcc
+    });
+  }, [to, cc, bcc]);
+
   useEffect(() => {
     const fetchSignature = async () => {
       if (!user) return;
@@ -211,7 +231,23 @@ const Redactar = () => {
         Redactar Correo
       </Typography>
 
-      <Paper component="form" onSubmit={handleSubmit} sx={{ p: 3, mt: 2 }}>
+      <Paper component="form" onSubmit={handleSubmit} autoComplete="off" sx={{ p: 3, mt: 2 }}>
+        {/* Inputs señuelo ocultos para absorber el autocompletado de Chrome */}
+        <input
+          type="text"
+          name="fake-username"
+          autoComplete="username"
+          style={{ position: "absolute", left: "-9999px", opacity: 0 }}
+          tabIndex={-1}
+        />
+        <input
+          type="password"
+          name="fake-password"
+          autoComplete="new-password"
+          style={{ position: "absolute", left: "-9999px", opacity: 0 }}
+          tabIndex={-1}
+        />
+
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
         <TextField
@@ -228,13 +264,21 @@ const Redactar = () => {
           label="Para"
           placeholder="ejemplo@correo.com"
           value={to}
-          onChange={(e) => setTo(e.target.value)}
+          onChange={handleToChange}
           margin="normal"
           required
           disabled={sending}
-          name="to"
-          id="email-to"
-          autoComplete="email"
+          name="pixel_to_recipient"
+          id="pixel-to-recipient"
+          type="text"
+          autoComplete="off"
+          slotProps={{
+            htmlInput: {
+              autoComplete: "off",
+              "data-lpignore": "true",
+              "data-form-type": "other"
+            }
+          }}
         />
 
         <Box sx={{ display: 'flex', gap: 2 }}>
@@ -243,24 +287,40 @@ const Redactar = () => {
             label="CC"
             placeholder="copia@correo.com"
             value={cc}
-            onChange={(e) => setCc(e.target.value)}
+            onChange={handleCcChange}
             margin="normal"
             disabled={sending}
-            name="cc"
-            id="email-cc"
+            name="pixel_cc_recipient"
+            id="pixel-cc-recipient"
+            type="text"
             autoComplete="off"
+            slotProps={{
+              htmlInput: {
+                autoComplete: "off",
+                "data-lpignore": "true",
+                "data-form-type": "other"
+              }
+            }}
           />
           <TextField
             fullWidth
             label="CCO"
             placeholder="copia-oculta@correo.com"
             value={bcc}
-            onChange={(e) => setBcc(e.target.value)}
+            onChange={handleBccChange}
             margin="normal"
             disabled={sending}
-            name="bcc"
-            id="email-bcc"
+            name="pixel_bcc_recipient"
+            id="pixel-bcc-recipient"
+            type="text"
             autoComplete="off"
+            slotProps={{
+              htmlInput: {
+                autoComplete: "off",
+                "data-lpignore": "true",
+                "data-form-type": "other"
+              }
+            }}
           />
         </Box>
 
