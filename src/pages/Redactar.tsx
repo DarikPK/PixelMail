@@ -36,15 +36,24 @@ const Redactar = () => {
   const [sending, setSending] = useState(false);
   const [signature, setSignature] = useState('Saludos,\nDavid Lachira\nPixel');
 
+  console.log("[PIXEL MAIL RENDER STATE]", {
+    to,
+    cc,
+    bcc
+  });
+
   const handleToChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("TO", event.target.value);
     setTo(event.target.value);
   };
 
   const handleCcChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("CC", event.target.value);
     setCc(event.target.value);
   };
 
   const handleBccChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("BCC", event.target.value);
     setBcc(event.target.value);
   };
 
@@ -272,6 +281,13 @@ const Redactar = () => {
           id="pixel-to-recipient"
           type="text"
           autoComplete="off"
+          {...{
+            inputProps: {
+              autoComplete: "off",
+              "data-lpignore": "true",
+              "data-form-type": "other"
+            }
+          }}
           slotProps={{
             htmlInput: {
               autoComplete: "off",
@@ -294,6 +310,13 @@ const Redactar = () => {
             id="pixel-cc-recipient"
             type="text"
             autoComplete="off"
+            {...{
+              inputProps: {
+                autoComplete: "off",
+                "data-lpignore": "true",
+                "data-form-type": "other"
+              }
+            }}
             slotProps={{
               htmlInput: {
                 autoComplete: "off",
@@ -314,6 +337,13 @@ const Redactar = () => {
             id="pixel-bcc-recipient"
             type="text"
             autoComplete="off"
+            {...{
+              inputProps: {
+                autoComplete: "off",
+                "data-lpignore": "true",
+                "data-form-type": "other"
+              }
+            }}
             slotProps={{
               htmlInput: {
                 autoComplete: "off",
