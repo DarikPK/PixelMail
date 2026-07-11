@@ -232,6 +232,9 @@ const Redactar = () => {
           margin="normal"
           required
           disabled={sending}
+          name="to"
+          id="email-to"
+          autoComplete="email"
         />
 
         <Box sx={{ display: 'flex', gap: 2 }}>
@@ -243,6 +246,9 @@ const Redactar = () => {
             onChange={(e) => setCc(e.target.value)}
             margin="normal"
             disabled={sending}
+            name="cc"
+            id="email-cc"
+            autoComplete="off"
           />
           <TextField
             fullWidth
@@ -252,6 +258,9 @@ const Redactar = () => {
             onChange={(e) => setBcc(e.target.value)}
             margin="normal"
             disabled={sending}
+            name="bcc"
+            id="email-bcc"
+            autoComplete="off"
           />
         </Box>
 
