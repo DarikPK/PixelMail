@@ -57,6 +57,10 @@ const Redactar = () => {
     setBcc(event.target.value);
   };
 
+  const handleUnlockInput = (event: React.FocusEvent<HTMLInputElement>) => {
+    event.currentTarget.removeAttribute("readonly");
+  };
+
   useEffect(() => {
     console.log("[PIXEL MAIL RECIPIENTS]", {
       to,
@@ -241,19 +245,19 @@ const Redactar = () => {
       </Typography>
 
       <Paper component="form" onSubmit={handleSubmit} autoComplete="off" sx={{ p: 3, mt: 2 }}>
-        {/* Inputs señuelo ocultos para absorber el autocompletado de Chrome */}
+        {/* Inputs señuelo invisibles al principio del formulario para absorber el autorrelleno de Chrome */}
         <input
           type="text"
-          name="fake-username"
-          autoComplete="username"
-          style={{ position: "absolute", left: "-9999px", opacity: 0 }}
+          name="fake_contact_name"
+          autoComplete="name"
+          style={{ position: "absolute", left: "-10000px", top: "auto", width: "1px", height: "1px", overflow: "hidden" }}
           tabIndex={-1}
         />
         <input
-          type="password"
-          name="fake-password"
-          autoComplete="new-password"
-          style={{ position: "absolute", left: "-9999px", opacity: 0 }}
+          type="text"
+          name="fake_contact_email"
+          autoComplete="email"
+          style={{ position: "absolute", left: "-10000px", top: "auto", width: "1px", height: "1px", overflow: "hidden" }}
           tabIndex={-1}
         />
 
@@ -277,22 +281,32 @@ const Redactar = () => {
           margin="normal"
           required
           disabled={sending}
-          name="pixel_to_recipient"
-          id="pixel-to-recipient"
+          name="pixel_recipient_primary"
+          id="pixel-recipient-primary"
           type="text"
-          autoComplete="off"
+          autoComplete="new-password"
           {...{
             inputProps: {
-              autoComplete: "off",
+              autoComplete: "new-password",
               "data-lpignore": "true",
-              "data-form-type": "other"
+              "data-1p-ignore": "true",
+              "data-form-type": "other",
+              "aria-autocomplete": "none",
+              inputMode: "email",
+              readOnly: true,
+              onFocus: handleUnlockInput
             }
           }}
           slotProps={{
             htmlInput: {
-              autoComplete: "off",
+              autoComplete: "new-password",
               "data-lpignore": "true",
-              "data-form-type": "other"
+              "data-1p-ignore": "true",
+              "data-form-type": "other",
+              "aria-autocomplete": "none",
+              inputMode: "email",
+              readOnly: true,
+              onFocus: handleUnlockInput
             }
           }}
         />
@@ -306,22 +320,32 @@ const Redactar = () => {
             onChange={handleCcChange}
             margin="normal"
             disabled={sending}
-            name="pixel_cc_recipient"
-            id="pixel-cc-recipient"
+            name="pixel_recipient_copy"
+            id="pixel-recipient-copy"
             type="text"
-            autoComplete="off"
+            autoComplete="new-password"
             {...{
               inputProps: {
-                autoComplete: "off",
+                autoComplete: "new-password",
                 "data-lpignore": "true",
-                "data-form-type": "other"
+                "data-1p-ignore": "true",
+                "data-form-type": "other",
+                "aria-autocomplete": "none",
+                inputMode: "email",
+                readOnly: true,
+                onFocus: handleUnlockInput
               }
             }}
             slotProps={{
               htmlInput: {
-                autoComplete: "off",
+                autoComplete: "new-password",
                 "data-lpignore": "true",
-                "data-form-type": "other"
+                "data-1p-ignore": "true",
+                "data-form-type": "other",
+                "aria-autocomplete": "none",
+                inputMode: "email",
+                readOnly: true,
+                onFocus: handleUnlockInput
               }
             }}
           />
@@ -333,22 +357,32 @@ const Redactar = () => {
             onChange={handleBccChange}
             margin="normal"
             disabled={sending}
-            name="pixel_bcc_recipient"
-            id="pixel-bcc-recipient"
+            name="pixel_recipient_hidden"
+            id="pixel-recipient-hidden"
             type="text"
-            autoComplete="off"
+            autoComplete="new-password"
             {...{
               inputProps: {
-                autoComplete: "off",
+                autoComplete: "new-password",
                 "data-lpignore": "true",
-                "data-form-type": "other"
+                "data-1p-ignore": "true",
+                "data-form-type": "other",
+                "aria-autocomplete": "none",
+                inputMode: "email",
+                readOnly: true,
+                onFocus: handleUnlockInput
               }
             }}
             slotProps={{
               htmlInput: {
-                autoComplete: "off",
+                autoComplete: "new-password",
                 "data-lpignore": "true",
-                "data-form-type": "other"
+                "data-1p-ignore": "true",
+                "data-form-type": "other",
+                "aria-autocomplete": "none",
+                inputMode: "email",
+                readOnly: true,
+                onFocus: handleUnlockInput
               }
             }}
           />
