@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -224,6 +225,12 @@ const Editor = ({ content, onChange }: EditorProps) => {
       onChange(editor.getHTML());
     },
   });
+
+  useEffect(() => {
+    if (editor && content === '') {
+      editor.commands.clearContent();
+    }
+  }, [content, editor]);
 
   return (
     <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mt: 2, mb: 1, minHeight: 300 }}>

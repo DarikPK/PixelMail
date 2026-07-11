@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import Editor from '../components/Editor';
 import AttachmentManager from '../components/AttachmentManager';
+import type { AttachmentItem } from '../components/AttachmentManager';
 import { db } from '../config/firebase';
 import { collection, addDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -26,7 +27,8 @@ const Redactar = () => {
   const [bcc, setBcc] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
-  const [attachments, setAttachments] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [addSignature, setAddSignature] = useState(true);
   const [tabValue, setTabValue] = useState(0);
   const [error, setError] = useState('');
@@ -59,10 +61,37 @@ const Redactar = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || sending) return;
 
-    if (!to || !subject || !message) {
-      setError('Todos los campos son obligatorios');
+    const html = message;
+    const bodyText = html
+      ?.replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/g, " ");
+
+    const hasText = Boolean(bodyText?.trim());
+    const hasHtmlContent = Boolean(
+      html
+        ?.replace(/<[^>]*>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .trim()
+    );
+    const hasAttachments = attachments.length > 0;
+    const hasInlineImage = /<img[\s\S]*?>/i.test(html || "");
+
+    const hasContent = hasText || hasHtmlContent || hasInlineImage || hasAttachments;
+
+    const missingFields: string[] = [];
+    if (!to?.trim()) missingFields.push("destinatario");
+    if (!subject?.trim()) missingFields.push("asunto");
+    if (!hasContent) missingFields.push("contenido o archivo adjunto");
+
+    if (missingFields.length > 0) {
+      setError(`Falta completar: ${missingFields.join(", ")}`);
+      return;
+    }
+
+    if (html.includes('blob:')) {
+      setError('No se pueden enviar imágenes locales ("blob:"). Por favor, sube la imagen o espera a que termine de cargarse.');
       return;
     }
 
@@ -80,24 +109,48 @@ const Redactar = () => {
         throw new Error("VITE_SEND_EMAIL_URL no configurada");
       }
 
-      // 2. Enviar Correo mediante Function
-      console.log('[RESEND] sending');
-      const payload = {
+      // 2. Diagnóstico en consola (Punto 7)
+      const bodyTextFinal = finalMessage
+        ?.replace(/<[^>]*>/g, "")
+        .replace(/&nbsp;/g, " ");
+
+      console.log("[PIXEL MAIL] Enviando correo", {
         to,
         subject,
-        html: finalMessage,
-        cc: cc || undefined,
-        bcc: bcc || undefined,
-      };
-      console.log("[RESEND] payload", payload);
+        textLength: bodyTextFinal?.length || 0,
+        htmlLength: finalMessage?.length || 0,
+        attachmentCount: attachments.length,
+        attachments: attachments.map((item) => ({
+          name: item.file?.name || item.name,
+          type: item.file?.type || item.type,
+          size: item.file?.size || item.size,
+          isRealFile: item.file instanceof File,
+        })),
+      });
 
+      // 3. Crear FormData
+      const formData = new FormData();
+      formData.append('to', to);
+      formData.append('subject', subject);
+      if (cc?.trim()) formData.append('cc', cc);
+      if (bcc?.trim()) formData.append('bcc', bcc);
+      formData.append('html', finalMessage);
+      formData.append('text', bodyTextFinal || '');
+
+      attachments.forEach((item) => {
+        if (item.file) {
+          formData.append('attachments', item.file, item.name);
+        }
+      });
+
+      // 4. Enviar Correo mediante Function
+      console.log('[RESEND] sending');
       const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${idToken}`
         },
-        body: JSON.stringify(payload)
+        body: formData
       });
 
       const responseData = await response.json();
@@ -109,7 +162,7 @@ const Redactar = () => {
 
       console.log('[RESEND] success');
 
-      // 3. Solo si Resend tuvo éxito, guardar en Firestore
+      // 5. Solo si Resend tuvo éxito, guardar en Firestore
       await addDoc(collection(db, 'emails'), {
         userId: user.uid,
         from: user.email,
@@ -125,10 +178,25 @@ const Redactar = () => {
       });
       console.log('[FIRESTORE] email saved');
 
+      // 6. Limpieza completa
       setSuccess(true);
       setTo('');
+      setCc('');
+      setBcc('');
       setSubject('');
       setMessage('');
+
+      // Revocar las URLs de vista previa de los adjuntos antes de vaciarlos
+      attachments.forEach((item) => {
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      });
+      setAttachments([]);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     } catch (err: any) {
       console.error("Error en el envío:", err);
       setError(err.message || 'Error al enviar el correo.');
@@ -213,6 +281,7 @@ const Redactar = () => {
             <AttachmentManager
               files={attachments}
               onFilesChange={setAttachments}
+              fileInputRef={fileInputRef}
             />
           </>
         ) : (

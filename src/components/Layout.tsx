@@ -82,6 +82,11 @@ const Layout = () => {
           </ListItemButton>
         </ListItem>
       </List>
+      <Box sx={{ p: 2, textAlign: 'center' }}>
+        <Typography variant="caption" color="text.secondary">
+          versión 5.1
+        </Typography>
+      </Box>
     </div>
   );
 

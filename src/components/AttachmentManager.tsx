@@ -14,34 +14,55 @@ import {
   AttachFile as AttachIcon
 } from '@mui/icons-material';
 
-interface FileWithMetadata extends File {
+export interface AttachmentItem {
   id: string;
+  file: File;
+  name: string;
+  type: string;
+  size: number;
+  previewUrl?: string;
 }
 
 interface AttachmentManagerProps {
-  files: FileWithMetadata[];
-  onFilesChange: (files: FileWithMetadata[]) => void;
+  files: AttachmentItem[];
+  onFilesChange: (files: AttachmentItem[]) => void;
   maxTotalSize?: number; // en bytes
+  fileInputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
-const AttachmentManager = ({ files, onFilesChange, maxTotalSize = 10 * 1024 * 1024 }: AttachmentManagerProps) => {
+const AttachmentManager = ({ files, onFilesChange, maxTotalSize = 10 * 1024 * 1024, fileInputRef }: AttachmentManagerProps) => {
   const onDrop = (acceptedFiles: File[]) => {
-    const newFiles = acceptedFiles.map(file => Object.assign(file, {
-      id: Math.random().toString(36).substring(7)
-    })) as FileWithMetadata[];
+    const newItems: AttachmentItem[] = acceptedFiles.map(file => {
+      const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+      return {
+        id: crypto.randomUUID(),
+        file,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        previewUrl
+      };
+    });
 
     const totalCurrentSize = files.reduce((acc, file) => acc + file.size, 0);
-    const totalNewSize = newFiles.reduce((acc, file) => acc + file.size, 0);
+    const totalNewSize = newItems.reduce((acc, file) => acc + file.size, 0);
 
     if (totalCurrentSize + totalNewSize > maxTotalSize) {
       alert('El tamaño total de los archivos no puede superar los 10 MB');
+      newItems.forEach(item => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
       return;
     }
 
-    onFilesChange([...files, ...newFiles]);
+    onFilesChange([...files, ...newItems]);
   };
 
   const removeFile = (id: string) => {
+    const itemToRemove = files.find(file => file.id === id);
+    if (itemToRemove?.previewUrl) {
+      URL.revokeObjectURL(itemToRemove.previewUrl);
+    }
     onFilesChange(files.filter(file => file.id !== id));
   };
 
@@ -92,7 +113,26 @@ const AttachmentManager = ({ files, onFilesChange, maxTotalSize = 10 * 1024 * 10
           '&:hover': { bgcolor: 'action.hover' }
         }}
       >
-        <input {...getInputProps()} />
+        <input
+          {...getInputProps()}
+          ref={(node) => {
+            const dropzoneProps = getInputProps() as any;
+            if (dropzoneProps && dropzoneProps.ref) {
+              if (typeof dropzoneProps.ref === 'function') {
+                dropzoneProps.ref(node);
+              } else {
+                dropzoneProps.ref.current = node;
+              }
+            }
+            if (fileInputRef) {
+              if (typeof fileInputRef === 'function') {
+                (fileInputRef as any)(node);
+              } else {
+                (fileInputRef as any).current = node;
+              }
+            }
+          }}
+        />
         <UploadIcon color="action" sx={{ fontSize: 40, mb: 1 }} />
         <Typography variant="body2" color="textSecondary">
           Arrastra archivos aquí o haz clic para seleccionar
