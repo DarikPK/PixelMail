@@ -31,7 +31,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from '@mui/icons-material';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
@@ -161,9 +161,10 @@ const Recibidos = () => {
   };
 
   const handleEmptyTrash = async () => {
-    if (emails.length === 0) return;
+    const deletedEmails = emails.filter((e) => e.deleted);
+    if (deletedEmails.length === 0) return;
 
-    const confirmMessage = `¿Deseas eliminar definitivamente todos los correos de la papelera? Esta acción no se puede deshacer.\n\nCantidad de correos que serán eliminados: ${emails.length}`;
+    const confirmMessage = `¿Vaciar toda la papelera?\n\nSe eliminarán definitivamente los correos recibidos y enviados que estén en Papelera.\n\nEsta acción no se puede deshacer.`;
     if (!window.confirm(confirmMessage)) return;
 
     setEmptying(true);
@@ -172,7 +173,7 @@ const Recibidos = () => {
       let batch = writeBatch(db);
       let count = 0;
 
-      for (const email of emails) {
+      for (const email of deletedEmails) {
         batch.delete(doc(db, 'emails', email.id));
         count++;
 
@@ -261,8 +262,20 @@ const Recibidos = () => {
     );
   }
 
-  // Filtrado de correos según la navegación activa
+  // Sub-pestaña para la papelera de reciclaje: 0 para recibidos, 1 para enviados
+  const [trashSubTab, setTrashSubTab] = useState(0);
+
+  // Resetear la sub-pestaña al cambiar de sección
+  useEffect(() => {
+    setTrashSubTab(0);
+  }, [activeNav]);
+
+  // Filtrado de correos según la navegación activa (incluyendo enviados en papelera)
   const filteredEmails = emails.filter((email) => {
+    if (activeNav === 'eliminados') {
+      return email.deleted;
+    }
+
     if (email.direction !== 'inbound') return false;
 
     if (activeNav === 'recibidos') {
@@ -271,13 +284,44 @@ const Recibidos = () => {
       return !email.deleted && email.starred;
     } else if (activeNav === 'archivados') {
       return !email.deleted && email.archived;
-    } else if (activeNav === 'eliminados') {
-      return email.deleted;
     } else if (activeNav === 'folder') {
       return !email.deleted && email.folderId === activeFolderId;
     }
     return false;
   });
+
+  // Filtrar visibleEmails según la sub-pestaña en la papelera
+  const visibleEmails = useMemo(() => {
+    if (activeNav === 'eliminados') {
+      return filteredEmails.filter((email) => {
+        const isSent = email.direction !== 'inbound';
+        return trashSubTab === 1 ? isSent : !isSent;
+      });
+    }
+    return filteredEmails;
+  }, [filteredEmails, activeNav, trashSubTab]);
+
+  // Ordenar correos de la papelera por deletedAt desc
+  const sortedEmails = useMemo(() => {
+    const list = [...visibleEmails];
+    if (activeNav === 'eliminados') {
+      list.sort((a, b) => {
+        const timeA = a.deletedAt ? (a.deletedAt.toDate ? a.deletedAt.toDate().getTime() : new Date(a.deletedAt).getTime()) : 0;
+        const timeB = b.deletedAt ? (b.deletedAt.toDate ? b.deletedAt.toDate().getTime() : new Date(b.deletedAt).getTime()) : 0;
+        return timeB - timeA;
+      });
+    }
+    return list;
+  }, [visibleEmails, activeNav]);
+
+  // Contadores internos de la papelera
+  const trashReceivedCount = useMemo(() => {
+    return filteredEmails.filter(e => e.direction === 'inbound').length;
+  }, [filteredEmails]);
+
+  const trashSentCount = useMemo(() => {
+    return filteredEmails.filter(e => e.direction !== 'inbound').length;
+  }, [filteredEmails]);
 
   // Si hay un correo seleccionado, mostramos la vista completa del correo en lugar del listado
   const emailToShow = emails.find((e) => e.id === selectedEmailId);
@@ -447,18 +491,63 @@ const Recibidos = () => {
         </Tabs>
       </Box>
 
+      {/* Sub-pestañas exclusivas para la papelera de reciclaje: RECIBIDOS y ENVIADOS */}
+      {activeNav === 'eliminados' && (
+        <Box sx={{ borderBottom: '1px solid', borderColor: 'divider', mb: 1.0, mt: 1.0 }}>
+          <Tabs
+            value={trashSubTab}
+            onChange={(_, val) => setTrashSubTab(val)}
+            sx={{
+              minHeight: '30px',
+              '& .MuiTabs-indicator': {
+                height: '2px',
+                bgcolor: '#EF4444',
+                borderRadius: '2px 2px 0 0'
+              }
+            }}
+          >
+            <Tab
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '11px' }}>
+                    RECIBIDOS
+                  </Typography>
+                  <Box sx={{ display: 'inline-flex', px: 0.6, py: 0.1, borderRadius: '6px', bgcolor: trashSubTab === 0 ? 'rgba(239,68,68,0.12)' : 'rgba(15,23,42,0.04)', color: trashSubTab === 0 ? '#EF4444' : 'text.secondary', fontSize: '9px', fontWeight: 'bold' }}>
+                    {trashReceivedCount}
+                  </Box>
+                </Box>
+              }
+              sx={{ minHeight: '30px', py: 0.4, px: 1.0, minWidth: 'auto', textTransform: 'none' }}
+            />
+            <Tab
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '11px' }}>
+                    ENVIADOS
+                  </Typography>
+                  <Box sx={{ display: 'inline-flex', px: 0.6, py: 0.1, borderRadius: '6px', bgcolor: trashSubTab === 1 ? 'rgba(239,68,68,0.12)' : 'rgba(15,23,42,0.04)', color: trashSubTab === 1 ? '#EF4444' : 'text.secondary', fontSize: '9px', fontWeight: 'bold' }}>
+                    {trashSentCount}
+                  </Box>
+                </Box>
+              }
+              sx={{ minHeight: '30px', py: 0.4, px: 1.0, minWidth: 'auto', textTransform: 'none' }}
+            />
+          </Tabs>
+        </Box>
+      )}
+
       {/* Barra de acciones horizontal (Selección múltiple e indeterminada) */}
       {(() => {
-        const allVisibleIds = filteredEmails.map(e => e.id);
-        const areAllSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selectedEmailIds.includes(id));
-        const isIndeterminate = allVisibleIds.length > 0 && allVisibleIds.some(id => selectedEmailIds.includes(id)) && !areAllSelected;
+        const allVisibleIds = visibleEmails.map((e: EmailData) => e.id);
+        const areAllSelected = allVisibleIds.length > 0 && allVisibleIds.every((id: string) => selectedEmailIds.includes(id));
+        const isIndeterminate = allVisibleIds.length > 0 && allVisibleIds.some((id: string) => selectedEmailIds.includes(id)) && !areAllSelected;
 
         const handleSelectAllToggle = () => {
           if (areAllSelected) {
-            setSelectedEmailIds(prev => prev.filter(id => !allVisibleIds.includes(id)));
+            setSelectedEmailIds(prev => prev.filter((id: string) => !allVisibleIds.includes(id)));
           } else {
             setSelectedEmailIds(prev => {
-              const otherSelected = prev.filter(id => !allVisibleIds.includes(id));
+              const otherSelected = prev.filter((id: string) => !allVisibleIds.includes(id));
               return [...otherSelected, ...allVisibleIds];
             });
           }
@@ -620,7 +709,7 @@ const Recibidos = () => {
               </Tooltip>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
                 <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 600, fontSize: '10.5px' }}>
-                  1-{filteredEmails.length} de {filteredEmails.length}
+                  1-{visibleEmails.length} de {visibleEmails.length}
                 </Typography>
                 <IconButton size="small" sx={{ color: 'text.disabled', p: 0.3 }} disabled>
                   <ChevronLeft sx={{ fontSize: '16px' }} />
@@ -640,14 +729,14 @@ const Recibidos = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress size={26} />
           </Box>
-        ) : filteredEmails.length === 0 ? (
+        ) : sortedEmails.length === 0 ? (
           <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'rgba(15,23,42,0.01)', border: '1px dashed divider' }}>
             <Typography variant="body2" color="text.secondary">
               No hay correos en esta sección.
             </Typography>
           </Paper>
         ) : (
-          filteredEmails.map((email) => {
+          sortedEmails.map((email: EmailData) => {
             const isUnread = !email.read;
             const senderName = email.fromName || email.fromEmail.split('@')[0] || email.from;
             const initial = senderName.charAt(0).toUpperCase();
