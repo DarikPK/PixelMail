@@ -425,9 +425,9 @@ const Recibidos = () => {
 
   return (
     <Box sx={{ animation: 'fadeIn 200ms ease-in-out' }}>
-      {/* Título de la sección */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5, mb: 2 }}>
-        <Typography variant="h3" sx={{ fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.8px', fontSize: { xs: '24px', md: '28px' } }}>
+      {/* Título de la sección compactado a 26px en escritorio */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.0, mb: 1.5 }}>
+        <Typography variant="h3" sx={{ fontWeight: 700, color: 'text.primary', letterSpacing: '-0.5px', fontSize: { xs: '22px', md: '26px' }, lineHeight: 1.2 }}>
           Bandeja de Entrada
         </Typography>
 
@@ -459,16 +459,16 @@ const Recibidos = () => {
       </Box>
 
       {/* Pestañas de la Bandeja */}
-      <Box sx={{ borderBottom: '1px solid', borderColor: 'rgba(255,255,255,0.08)' }}>
+      <Box sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
         <Tabs
           value={tabValue}
           onChange={handleTabChange}
           sx={{
-            minHeight: '40px',
+            minHeight: '34px',
             '& .MuiTabs-indicator': {
-              height: '2.5px',
+              height: '2px',
               bgcolor: '#3B82F6',
-              borderRadius: '2.5px 2.5px 0 0'
+              borderRadius: '2px 2px 0 0'
             }
           }}
         >
@@ -478,25 +478,25 @@ const Recibidos = () => {
               <Tab
                 key={tab.label}
                 label={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700, letterSpacing: '0.4px', fontSize: '12px' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, letterSpacing: '0.2px', fontSize: '11.5px' }}>
                       {tab.label}
                     </Typography>
                     {tab.count > 0 && (
-                      <Box sx={{ display: 'inline-flex', px: 0.8, py: 0.1, borderRadius: '8px', bgcolor: isActive ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)', color: isActive ? '#3B82F6' : '#B8C1D1', fontSize: '10px', fontWeight: 'bold' }}>
+                      <Box sx={{ display: 'inline-flex', px: 0.6, py: 0.1, borderRadius: '6px', bgcolor: isActive ? 'rgba(59,130,246,0.12)' : 'rgba(15,23,42,0.04)', color: isActive ? '#3B82F6' : 'text.secondary', fontSize: '9px', fontWeight: 'bold' }}>
                         {tab.count}
                       </Box>
                     )}
                   </Box>
                 }
                 sx={{
-                  color: isActive ? '#3B82F6 !important' : '#B8C1D1',
-                  py: 1,
-                  px: 1.5,
-                  minHeight: '40px',
+                  color: isActive ? '#3B82F6 !important' : 'text.secondary',
+                  py: 0.5,
+                  px: 1.0,
+                  minHeight: '34px',
                   minWidth: 'auto',
                   transition: 'color 150ms ease-in-out',
-                  '&:hover': { color: '#FFFFFF' }
+                  '&:hover': { color: 'text.primary' }
                 }}
               />
             );
@@ -505,23 +505,23 @@ const Recibidos = () => {
       </Box>
 
       {/* Barra de acciones horizontal */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.0, py: 1.0, px: 0.5, borderBottom: '1px solid', borderColor: 'rgba(255,255,255,0.08)', mb: 1.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Checkbox size="small" disabled sx={{ color: '#6F7A8A', p: 0.3 }} />
-          <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.08)', mx: 0.3 }} />
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 0.8, py: 0.6, px: 0.2, borderBottom: '1px solid', borderColor: 'divider', mb: 1.0 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+          <Checkbox size="small" disabled sx={{ color: 'text.disabled', p: 0.2 }} />
+          <Divider orientation="vertical" flexItem sx={{ borderColor: 'divider', mx: 0.2 }} />
           <Tooltip title="Actualizar">
-            <IconButton size="small" sx={{ color: '#B8C1D1' }} onClick={() => setLoading(true)}>
-              <Refresh sx={{ fontSize: '18px' }} />
+            <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} onClick={() => setLoading(true)}>
+              <Refresh sx={{ fontSize: '16px' }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Filtrar">
-            <IconButton size="small" sx={{ color: '#B8C1D1' }} disabled>
-              <FilterList sx={{ fontSize: '18px' }} />
+            <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} disabled>
+              <FilterList sx={{ fontSize: '16px' }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Más opciones">
-            <IconButton size="small" sx={{ color: '#B8C1D1' }} onClick={(e) => setActionsAnchorEl(e.currentTarget)}>
-              <MoreVert sx={{ fontSize: '18px' }} />
+            <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} onClick={(e) => setActionsAnchorEl(e.currentTarget)}>
+              <MoreVert sx={{ fontSize: '16px' }} />
             </IconButton>
           </Tooltip>
 
@@ -532,47 +532,46 @@ const Recibidos = () => {
             slotProps={{
               paper: {
                 sx: {
-                  borderRadius: '10px',
-                  bgcolor: '#1B2130',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  p: 0.3
+                  borderRadius: '8px',
+                  border: '1px solid divider',
+                  p: 0.2
                 }
               }
             }}
           >
-            <MenuItem onClick={() => setActionsAnchorEl(null)} disabled sx={{ borderRadius: '6px', fontSize: '12px' }}>Marcar todos como leídos</MenuItem>
-            <MenuItem onClick={() => setActionsAnchorEl(null)} disabled sx={{ borderRadius: '6px', fontSize: '12px' }}>Seleccionar todo</MenuItem>
+            <MenuItem onClick={() => setActionsAnchorEl(null)} disabled sx={{ borderRadius: '4px', fontSize: '11.5px', py: 0.5 }}>Marcar todos como leídos</MenuItem>
+            <MenuItem onClick={() => setActionsAnchorEl(null)} disabled sx={{ borderRadius: '4px', fontSize: '11.5px', py: 0.5 }}>Seleccionar todo</MenuItem>
           </Menu>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.0 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
           <Tooltip title="Cambiar vista">
-            <IconButton size="small" sx={{ color: '#B8C1D1' }} disabled>
-              <ViewList sx={{ fontSize: '18px' }} />
+            <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} disabled>
+              <ViewList sx={{ fontSize: '16px' }} />
             </IconButton>
           </Tooltip>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
-            <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '11px' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
+            <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 600, fontSize: '10.5px' }}>
               1-{emails.length} de {emails.length}
             </Typography>
-            <IconButton size="small" sx={{ color: '#6F7A8A' }} disabled>
-              <ChevronLeft sx={{ fontSize: '18px' }} />
+            <IconButton size="small" sx={{ color: 'text.disabled', p: 0.3 }} disabled>
+              <ChevronLeft sx={{ fontSize: '16px' }} />
             </IconButton>
-            <IconButton size="small" sx={{ color: '#6F7A8A' }} disabled>
-              <ChevronRight sx={{ fontSize: '18px' }} />
+            <IconButton size="small" sx={{ color: 'text.disabled', p: 0.3 }} disabled>
+              <ChevronRight sx={{ fontSize: '16px' }} />
             </IconButton>
           </Box>
         </Box>
       </Box>
 
-      {/* Listado de Tarjetas Modernas de Correo (gap reducido) */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8 }}>
+      {/* Listado de Filas de Correo compactadas (CSS Grid) */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4 }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-            <CircularProgress size={30} />
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={26} />
           </Box>
         ) : emails.length === 0 ? (
-          <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)' }}>
+          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'rgba(15,23,42,0.01)', border: '1px dashed divider' }}>
             <Typography variant="body2" color="text.secondary">
               No hay correos en esta sección.
             </Typography>
@@ -593,107 +592,118 @@ const Recibidos = () => {
                 variant="outlined"
                 onClick={() => handleOpenEmail(email)}
                 sx={{
-                  borderRadius: '12px',
-                  bgcolor: isUnread ? '#1B2130' : 'rgba(255,255,255,0.02)',
-                  borderColor: isUnread ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.08)',
+                  borderRadius: '6px',
+                  bgcolor: isUnread ? 'action.selected' : 'background.paper',
+                  borderColor: isUnread ? '#3B82F6' : 'divider',
                   cursor: 'pointer',
-                  transition: 'all 180ms ease-in-out',
+                  transition: 'all 120ms ease-in-out',
+                  height: '48px', // Ultra compacto
+                  display: 'flex',
+                  alignItems: 'center',
                   '&:hover': {
-                    bgcolor: '#242C3D',
-                    transform: 'translateY(-1px)',
-                    boxShadow: '0 6px 12px -2px rgba(0,0,0,0.3)',
-                    borderColor: 'rgba(255,255,255,0.15)',
+                    bgcolor: 'action.hover',
+                    borderColor: 'text.secondary',
                     '& .quick-actions': { opacity: 1 }
                   }
                 }}
               >
-                {/* Padding vertical reducido un 25% (de 16px a 10px) */}
-                <CardContent sx={{ p: '10px 14px !important', display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
-                  {/* Checkbox y Estrella */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }} onClick={(e) => e.stopPropagation()}>
-                    <Checkbox size="small" disabled sx={{ color: 'rgba(255,255,255,0.15)', p: 0.3 }} />
-                    <IconButton size="small" onClick={(e) => handleToggleStar(e, email)} sx={{ p: 0.3, color: email.starred ? '#FACC15' : 'rgba(255,255,255,0.15)' }}>
-                      {email.starred ? <Star sx={{ fontSize: '18px' }} /> : <StarBorder sx={{ fontSize: '18px' }} />}
+                <CardContent sx={{
+                  p: '0px 12px !important',
+                  width: '100%',
+                  display: 'grid',
+                  gridTemplateColumns: '70px 42px minmax(140px, 200px) minmax(200px, 1fr) 90px 80px',
+                  alignItems: 'center',
+                  gap: 1.0
+                }}>
+                  {/* Selección y estrella (70px) */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }} onClick={(e) => e.stopPropagation()}>
+                    <Checkbox size="small" disabled sx={{ color: 'text.disabled', p: 0.2 }} />
+                    <IconButton size="small" onClick={(e) => handleToggleStar(e, email)} sx={{ p: 0.2, color: email.starred ? '#FACC15' : 'text.disabled' }}>
+                      {email.starred ? <Star sx={{ fontSize: '16px' }} /> : <StarBorder sx={{ fontSize: '16px' }} />}
                     </IconButton>
                   </Box>
 
-                  {/* Avatar circular estilo Gmail (reducido a 32px) */}
-                  <Avatar sx={{ bgcolor: avatarBg, width: 32, height: 32, fontSize: '12px', fontWeight: 'bold' }}>
-                    {initial}
-                  </Avatar>
+                  {/* Avatar circular (42px) */}
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <Avatar sx={{ bgcolor: avatarBg, width: 26, height: 26, fontSize: '10.5px', fontWeight: 'bold' }}>
+                      {initial}
+                    </Avatar>
+                  </Box>
 
-                  {/* Remitente, asunto y vista previa */}
-                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flexWrap: 'wrap', mb: 0.2 }}>
-                      <Typography variant="body1" noWrap sx={{ fontWeight: isUnread ? 700 : 500, color: isUnread ? '#FFFFFF' : '#B8C1D1', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 200, fontSize: '13.5px' }}>
-                        {senderName}
-                      </Typography>
-
-                      {isUnread && (
-                        <Box sx={{ px: 0.8, py: 0.1, borderRadius: '4px', bgcolor: 'rgba(59,130,246,0.15)', color: '#3B82F6', fontSize: '9px', fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                          NUEVO
-                        </Box>
-                      )}
-
-                      {email.attachments.length > 0 && (
-                        <AttachIcon sx={{ fontSize: '14px', color: '#6F7A8A' }} />
-                      )}
-                    </Box>
-
-                    <Typography variant="body2" noWrap sx={{ fontWeight: isUnread ? 600 : 400, color: '#FFFFFF', mb: 0.2, textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '13px' }}>
-                      {email.subject || '(Sin asunto)'}
+                  {/* Remitente (minmax(140px, 200px)) */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: isUnread ? 700 : 500, color: 'text.primary', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '12.5px' }}>
+                      {senderName}
                     </Typography>
 
-                    <Typography variant="body2" noWrap sx={{ color: '#6F7A8A', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block', fontSize: '12px' }}>
-                      {previewText}
+                    {isUnread && (
+                      <Box sx={{ px: 0.6, py: 0.05, borderRadius: '3px', bgcolor: 'rgba(59,130,246,0.15)', color: '#3B82F6', fontSize: '8px', fontWeight: 'bold' }}>
+                        NUEVO
+                      </Box>
+                    )}
+
+                    {email.attachments.length > 0 && (
+                      <AttachIcon sx={{ fontSize: '12px', color: 'text.disabled' }} />
+                    )}
+                  </Box>
+
+                  {/* Asunto y vista previa (minmax(200px, 1fr)) */}
+                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.8, minWidth: 0 }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: isUnread ? 600 : 400, color: 'text.primary', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '12.5px', flexShrink: 0, mr: 1 }}>
+                      {email.subject || '(Sin asunto)'}
+                    </Typography>
+                    <Typography variant="caption" noWrap sx={{ color: 'text.secondary', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '12px' }}>
+                      — {previewText}
                     </Typography>
                   </Box>
 
-                  {/* Fecha y acciones rápidas */}
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5, minWidth: 85, alignSelf: 'stretch', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" sx={{ color: isUnread ? '#3B82F6' : '#6F7A8A', fontWeight: isUnread ? 700 : 500, fontSize: '11px' }}>
+                  {/* Fecha (90px) */}
+                  <Box sx={{ textAlign: 'right', pr: 1 }}>
+                    <Typography variant="caption" sx={{ color: isUnread ? '#3B82F6' : 'text.secondary', fontWeight: isUnread ? 700 : 500, fontSize: '11px' }}>
                       {email.receivedAt.toLocaleDateString('es-PE', { month: 'short', day: 'numeric' })}
                     </Typography>
+                  </Box>
 
-                    {/* Acciones rápidas al hacer hover */}
+                  {/* Acciones de hover (80px) */}
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                     <Box
                       className="quick-actions"
                       onClick={(e) => e.stopPropagation()}
                       sx={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 0.3,
-                        opacity: { xs: 1, md: 0 },
-                        transition: 'opacity 150ms ease-in-out',
+                        gap: 0.2,
+                        opacity: 0,
+                        transition: 'opacity 100ms ease-in-out',
                         bgcolor: 'background.paper',
-                        borderRadius: '6px',
-                        border: '1px solid rgba(255,255,255,0.05)',
+                        borderRadius: '4px',
+                        border: '1px solid divider',
                         p: 0.1
                       }}
                     >
                       {tabValue === 3 ? (
                         <>
                           <Tooltip title="Restaurar">
-                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} sx={{ color: '#3B82F6', p: 0.3 }} aria-label="Restaurar correo">
-                              <RestoreFromTrash sx={{ fontSize: '16px' }} />
+                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} sx={{ color: '#3B82F6', p: 0.2 }} aria-label="Restaurar correo">
+                              <RestoreFromTrash sx={{ fontSize: '14px' }} />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Eliminar definitivamente">
-                            <IconButton size="small" onClick={(e) => handleDeleteForeverSingle(e, email)} sx={{ color: '#EF4444', p: 0.3 }} aria-label="Eliminar definitivamente">
-                              <DeleteForever sx={{ fontSize: '16px' }} />
+                            <IconButton size="small" onClick={(e) => handleDeleteForeverSingle(e, email)} sx={{ color: '#EF4444', p: 0.2 }} aria-label="Eliminar definitivamente">
+                              <DeleteForever sx={{ fontSize: '14px' }} />
                             </IconButton>
                           </Tooltip>
                         </>
                       ) : (
                         <>
                           <Tooltip title={email.archived ? "Mover a Recibidos" : "Archivar"}>
-                            <IconButton size="small" onClick={(e) => handleToggleArchive(e, email)} sx={{ color: '#B8C1D1', p: 0.3 }} aria-label="Archivar correo">
-                              <Archive sx={{ fontSize: '16px' }} />
+                            <IconButton size="small" onClick={(e) => handleToggleArchive(e, email)} sx={{ color: 'text.secondary', p: 0.2 }} aria-label="Archivar correo">
+                              <Archive sx={{ fontSize: '14px' }} />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Eliminar">
-                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} sx={{ color: '#EF4444', p: 0.3 }} aria-label="Eliminar correo">
-                              <Delete sx={{ fontSize: '16px' }} />
+                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} sx={{ color: '#EF4444', p: 0.2 }} aria-label="Eliminar correo">
+                              <Delete sx={{ fontSize: '14px' }} />
                             </IconButton>
                           </Tooltip>
                         </>

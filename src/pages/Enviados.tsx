@@ -99,18 +99,18 @@ const Enviados = () => {
 
   return (
     <Box sx={{ animation: 'fadeIn 200ms ease-in-out' }}>
-      <Typography variant="h3" sx={{ fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.8px', fontSize: { xs: '24px', md: '28px' }, mb: 2 }}>
+      <Typography variant="h3" sx={{ fontWeight: 700, color: 'text.primary', letterSpacing: '-0.5px', fontSize: { xs: '22px', md: '26px' }, lineHeight: 1.2, mb: 1.5 }}>
         Correos Enviados
       </Typography>
 
-      {/* Listado de Tarjetas Modernas de Correos Enviados (gap reducido) */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, mt: 1.5 }}>
+      {/* Listado de Filas de Correos Enviados compactadas (CSS Grid) */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4, mt: 1.5 }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-            <CircularProgress size={30} />
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={26} />
           </Box>
         ) : emails.length === 0 ? (
-          <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)' }}>
+          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'rgba(15,23,42,0.01)', border: '1px dashed divider' }}>
             <Typography variant="body2" color="text.secondary">
               No hay correos enviados.
             </Typography>
@@ -129,81 +129,92 @@ const Enviados = () => {
                 key={email.id}
                 variant="outlined"
                 sx={{
-                  borderRadius: '12px',
-                  bgcolor: 'rgba(255,255,255,0.02)',
-                  borderColor: 'rgba(255,255,255,0.08)',
-                  transition: 'all 180ms ease-in-out',
+                  borderRadius: '6px',
+                  bgcolor: 'background.paper',
+                  borderColor: 'divider',
+                  transition: 'all 120ms ease-in-out',
+                  height: '48px', // Ultra compacto
+                  display: 'flex',
+                  alignItems: 'center',
                   '&:hover': {
-                    bgcolor: '#242C3D',
-                    transform: 'translateY(-1px)',
-                    boxShadow: '0 6px 12px -2px rgba(0,0,0,0.3)',
-                    borderColor: 'rgba(255,255,255,0.15)',
+                    bgcolor: 'action.hover',
+                    borderColor: 'text.secondary',
                     '& .quick-actions': { opacity: 1 }
                   }
                 }}
               >
-                {/* Padding vertical reducido un 25% (de 16px a 10px) */}
-                <CardContent sx={{ p: '10px 14px !important', display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                <CardContent sx={{
+                  p: '0px 12px !important',
+                  width: '100%',
+                  display: 'grid',
+                  gridTemplateColumns: '70px 42px minmax(140px, 200px) minmax(200px, 1fr) 90px 80px',
+                  alignItems: 'center',
+                  gap: 1.0
+                }}>
                   {/* Icono de envíos */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', px: 0.5 }}>
-                    <SendIcon sx={{ color: '#3B82F6', fontSize: '18px' }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.2 }}>
+                    <SendIcon sx={{ color: '#3B82F6', fontSize: '15px' }} />
                   </Box>
 
-                  {/* Avatar del destinatario (reducido a 32px) */}
-                  <Avatar sx={{ bgcolor: avatarBg, width: 32, height: 32, fontSize: '12px', fontWeight: 'bold' }}>
-                    {initial}
-                  </Avatar>
+                  {/* Avatar del destinatario (reducido a 26px) */}
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <Avatar sx={{ bgcolor: avatarBg, width: 26, height: 26, fontSize: '10.5px', fontWeight: 'bold' }}>
+                      {initial}
+                    </Avatar>
+                  </Box>
 
-                  {/* Asunto, destinatario y vista previa */}
-                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flexWrap: 'wrap', mb: 0.2 }}>
-                      <Typography variant="body1" noWrap sx={{ fontWeight: 600, color: '#FFFFFF', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 200, fontSize: '13.5px' }}>
-                        Para: {recipientName}
-                      </Typography>
+                  {/* Destinatario (minmax(140px, 200px)) */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 600, color: 'text.primary', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 200, fontSize: '12.5px' }}>
+                      Para: {recipientName}
+                    </Typography>
 
-                      <Box sx={{ px: 0.8, py: 0.1, borderRadius: '4px', bgcolor: 'rgba(34,197,94,0.15)', color: '#22C55E', fontSize: '9px', fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                        ENVIADO
-                      </Box>
-
-                      {email.attachments && email.attachments.length > 0 && (
-                        <AttachIcon sx={{ fontSize: '14px', color: '#6F7A8A' }} />
-                      )}
+                    <Box sx={{ px: 0.6, py: 0.05, borderRadius: '3px', bgcolor: 'rgba(34,197,94,0.15)', color: '#22C55E', fontSize: '8px', fontWeight: 'bold' }}>
+                      ENVIADO
                     </Box>
 
-                    <Typography variant="body2" noWrap sx={{ fontWeight: 500, color: '#B8C1D1', mb: 0.2, textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '13px' }}>
+                    {email.attachments && email.attachments.length > 0 && (
+                      <AttachIcon sx={{ fontSize: '12px', color: 'text.disabled' }} />
+                    )}
+                  </Box>
+
+                  {/* Asunto y vista previa */}
+                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.8, minWidth: 0 }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 500, color: 'text.primary', mb: 0.2, textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '12.5px', flexShrink: 0, mr: 1 }}>
                       {email.subject || '(Sin asunto)'}
                     </Typography>
-
-                    <Typography variant="body2" noWrap sx={{ color: '#6F7A8A', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block', fontSize: '12px' }}>
-                      {previewText}
+                    <Typography variant="caption" noWrap sx={{ color: 'text.secondary', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '12px' }}>
+                      — {previewText}
                     </Typography>
                   </Box>
 
-                  {/* Fecha y acciones rápidas */}
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5, minWidth: 85, alignSelf: 'stretch', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 500, fontSize: '11px' }}>
+                  {/* Fecha (90px) */}
+                  <Box sx={{ textAlign: 'right', pr: 1 }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '11px' }}>
                       {email.createdAt.toLocaleDateString('es-PE', { month: 'short', day: 'numeric' })}
                     </Typography>
+                  </Box>
 
-                    {/* Acciones rápidas al hacer hover */}
+                  {/* Acciones rápidas al hacer hover */}
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                     <Box
                       className="quick-actions"
                       onClick={(e) => e.stopPropagation()}
                       sx={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 0.3,
-                        opacity: { xs: 1, md: 0 },
-                        transition: 'opacity 150ms ease-in-out',
+                        gap: 0.2,
+                        opacity: 0,
+                        transition: 'opacity 100ms ease-in-out',
                         bgcolor: 'background.paper',
-                        borderRadius: '6px',
-                        border: '1px solid rgba(255,255,255,0.05)',
+                        borderRadius: '4px',
+                        border: '1px solid divider',
                         p: 0.1
                       }}
                     >
                       <Tooltip title="Eliminar registro">
-                        <IconButton size="small" onClick={(e) => handleDeleteSent(e, email.id)} sx={{ color: '#EF4444', p: 0.3 }}>
-                          <Delete sx={{ fontSize: '16px' }} />
+                        <IconButton size="small" onClick={(e) => handleDeleteSent(e, email.id)} sx={{ color: '#EF4444', p: 0.2 }}>
+                          <Delete sx={{ fontSize: '14px' }} />
                         </IconButton>
                       </Tooltip>
                     </Box>
