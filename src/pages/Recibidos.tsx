@@ -8,18 +8,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Chip,
   CircularProgress,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
   Tabs,
   Tab,
-  Tooltip,
-  Divider
+  Tooltip
 } from '@mui/material';
 import {
   Star,
@@ -34,6 +27,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import EmailViewer from '../components/EmailViewer';
 
 interface EmailData {
   id: string;
@@ -62,8 +56,7 @@ const Recibidos = () => {
   const [emails, setEmails] = useState<EmailData[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0); // 0: Recibidos, 1: Destacados, 2: Archivados, 3: Eliminados
-  const [selectedEmail, setSelectedEmail] = useState<EmailData | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
 
   useEffect(() => {
     // 2. Esperar a que Firebase Authentication termine de cargar
@@ -227,8 +220,7 @@ const Recibidos = () => {
   };
 
   const handleOpenEmail = async (email: EmailData) => {
-    setSelectedEmail(email);
-    setDialogOpen(true);
+    setSelectedEmailId(email.id);
     if (!email.read) {
       try {
         await updateDoc(doc(db, 'emails', email.id), {
@@ -241,10 +233,13 @@ const Recibidos = () => {
   };
 
   const handleDownloadAttachment = async (filename: string) => {
-    if (!selectedEmail || !user) return;
+    if (!selectedEmailId || !user) return;
+    const currentEmail = emails.find(e => e.id === selectedEmailId);
+    if (!currentEmail) return;
+
     try {
       const idToken = await user.getIdToken();
-      const getAttachmentUrl = `${import.meta.env.VITE_SEND_EMAIL_URL.replace('/sendEmail', '/getAttachment')}?emailId=${selectedEmail.resendEmailId}&filename=${encodeURIComponent(filename)}`;
+      const getAttachmentUrl = `${import.meta.env.VITE_SEND_EMAIL_URL.replace('/sendEmail', '/getAttachment')}?emailId=${currentEmail.resendEmailId}&filename=${encodeURIComponent(filename)}`;
 
       const response = await fetch(getAttachmentUrl, {
         headers: {
@@ -270,19 +265,61 @@ const Recibidos = () => {
     }
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
   if (authLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
         <CircularProgress />
       </Box>
+    );
+  }
+
+  // Si hay un correo seleccionado, mostramos la vista completa del correo en lugar del listado
+  const emailToShow = emails.find((e) => e.id === selectedEmailId);
+  if (selectedEmailId && emailToShow) {
+    return (
+      <EmailViewer
+        email={emailToShow}
+        onBack={() => setSelectedEmailId(null)}
+        onToggleRead={async () => {
+          try {
+            await updateDoc(doc(db, 'emails', emailToShow.id), {
+              read: !emailToShow.read
+            });
+          } catch (error) {
+            console.error("[PIXEL MAIL INBOX] Error toggling read:", error);
+          }
+        }}
+        onToggleStar={async () => {
+          try {
+            await updateDoc(doc(db, 'emails', emailToShow.id), {
+              starred: !emailToShow.starred
+            });
+          } catch (error) {
+            console.error("[PIXEL MAIL INBOX] Error toggling star:", error);
+          }
+        }}
+        onToggleArchive={async () => {
+          try {
+            await updateDoc(doc(db, 'emails', emailToShow.id), {
+              archived: !emailToShow.archived
+            });
+            setSelectedEmailId(null);
+          } catch (error) {
+            console.error("[PIXEL MAIL INBOX] Error toggling archive:", error);
+          }
+        }}
+        onToggleDelete={async () => {
+          try {
+            await updateDoc(doc(db, 'emails', emailToShow.id), {
+              deleted: !emailToShow.deleted
+            });
+            setSelectedEmailId(null);
+          } catch (error) {
+            console.error("[PIXEL MAIL INBOX] Error toggling delete:", error);
+          }
+        }}
+        onDownloadAttachment={handleDownloadAttachment}
+      />
     );
   }
 
@@ -379,87 +416,6 @@ const Recibidos = () => {
           </TableBody>
         </Table>
       </TableContainer>
-
-      {/* Diálogo para visualizar el correo */}
-      <Dialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        {selectedEmail && (
-          <>
-            <DialogTitle sx={{ fontWeight: 'bold' }}>
-              {selectedEmail.subject}
-            </DialogTitle>
-            <DialogContent dividers>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2">
-                  <strong>De:</strong> {selectedEmail.fromName ? `${selectedEmail.fromName} <${selectedEmail.fromEmail}>` : selectedEmail.from}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Para:</strong> {selectedEmail.to.join(', ')}
-                </Typography>
-                {selectedEmail.cc.length > 0 && (
-                  <Typography variant="body2">
-                    <strong>CC:</strong> {selectedEmail.cc.join(', ')}
-                  </Typography>
-                )}
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Fecha:</strong> {selectedEmail.receivedAt.toLocaleString()}
-                </Typography>
-              </Box>
-              <Divider sx={{ my: 1 }} />
-
-              {/* Sanitizar HTML con iframe sandboxed para total seguridad */}
-              <Box sx={{ mt: 2, minHeight: 300, border: '1px solid #ddd', borderRadius: 1, p: 1, bgcolor: '#fff' }}>
-                {selectedEmail.html ? (
-                  <iframe
-                    title="Contenido del Correo"
-                    srcDoc={selectedEmail.html}
-                    sandbox="allow-popups"
-                    style={{
-                      width: '100%',
-                      height: '400px',
-                      border: 'none'
-                    }}
-                  />
-                ) : (
-                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {selectedEmail.text}
-                  </Typography>
-                )}
-              </Box>
-
-              {selectedEmail.attachments.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AttachIcon fontSize="small" /> Adjuntos ({selectedEmail.attachments.length})
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-                    {selectedEmail.attachments.map((att, index) => (
-                      <Chip
-                        key={index}
-                        label={`${att.name} (${formatSize(att.size)})`}
-                        onClick={() => handleDownloadAttachment(att.name)}
-                        variant="outlined"
-                        clickable
-                        color="primary"
-                        icon={<AttachIcon />}
-                      />
-                    ))}
-                  </Box>
-                </Box>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setDialogOpen(false)} variant="contained">
-                Cerrar
-              </Button>
-            </DialogActions>
-          </>
-        )}
-      </Dialog>
     </Box>
   );
 };
