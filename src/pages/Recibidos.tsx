@@ -31,7 +31,8 @@ import {
   ChevronLeft,
   ChevronRight
 } from '@mui/icons-material';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
@@ -62,6 +63,54 @@ interface EmailData {
   deletedAt?: any;
   previousFolder?: string | null;
   folderId?: string | null;
+  recipients?: any;
+  labels?: any;
+  body?: string;
+}
+
+const safeArray = (value: any): any[] => Array.isArray(value) ? value : [];
+
+const normalizeRecipients = (value: any): any[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string" && value.trim()) return [value];
+  return [];
+};
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class EmailRowErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = {
+    hasError: false
+  };
+
+  public static getDerivedStateFromError(_: Error): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("[EmailRowErrorBoundary] Error rendering email row:", error, errorInfo);
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <Card variant="outlined" sx={{ p: 1.5, borderColor: 'error.main', bgcolor: 'error.light', height: '48px', display: 'flex', alignItems: 'center', mb: 0.4 }}>
+          <Typography variant="body2" color="error.dark">
+            Error al cargar este correo.
+          </Typography>
+        </Card>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 // Colores suaves de avatares estilo Gmail
@@ -762,156 +811,235 @@ const Recibidos = () => {
             </Typography>
           </Paper>
         ) : (
-          sortedEmails.map((email: EmailData) => {
-            const isUnread = !email.read;
-            const fromEmail = email.fromEmail || '';
-            const senderName = email.fromName || (fromEmail ? fromEmail.split('@')[0] : '') || email.from || 'Remitente';
-            const initial = senderName.charAt(0).toUpperCase();
-            const avatarBg = getAvatarColor(senderName);
+          (() => {
+            // Diagnóstico temporal requerido por el usuario
+            const sentTrashEmails = activeNav === 'eliminados' && trashSubTab === 1 ? sortedEmails : null;
+            if (sentTrashEmails) {
+              console.log("[TRASH SENT] total:", sentTrashEmails?.length);
+              console.table(
+                (sentTrashEmails ?? []).map(email => ({
+                  id: email?.id,
+                  keys: Object.keys(email ?? {}).join(", "),
+                  toType: Array.isArray(email?.to) ? "array" : typeof email?.to,
+                  recipientsType: Array.isArray(email?.recipients)
+                    ? "array"
+                    : typeof email?.recipients,
+                  attachmentsType: Array.isArray(email?.attachments)
+                    ? "array"
+                    : typeof email?.attachments,
+                  labelsType: Array.isArray(email?.labels)
+                    ? "array"
+                    : typeof email?.labels
+                }))
+              );
+            }
 
-            // Extraer primer fragmento de contenido para vista previa
-            const previewText = email.text || email.html?.replace(/<[^>]*>/g, '').substring(0, 100) || '(Sin contenido)';
+            return sortedEmails.map((email: EmailData) => {
+              if (activeNav === 'eliminados' && trashSubTab === 1) {
+                if (!email) {
+                  console.error("[TRASH SENT] elemento undefined o null");
+                  return null;
+                }
 
-            return (
-              <Card
-                key={email.id}
-                variant="outlined"
-                onClick={() => handleOpenEmail(email)}
-                sx={{
-                  borderRadius: '6px',
-                  bgcolor: isUnread ? 'action.selected' : 'background.paper',
-                  borderColor: isUnread ? '#3B82F6' : 'divider',
-                  cursor: 'pointer',
-                  transition: 'all 120ms ease-in-out',
-                  height: '48px', // Ultra compacto
-                  display: 'flex',
-                  alignItems: 'center',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                    borderColor: 'text.secondary',
-                    '& .quick-actions': { opacity: 1 }
-                  }
-                }}
-              >
-                <CardContent sx={{
-                  p: '0px 12px !important',
-                  width: '100%',
-                  display: 'grid',
-                  gridTemplateColumns: '70px 42px minmax(140px, 200px) minmax(200px, 1fr) 90px 80px',
-                  alignItems: 'center',
-                  gap: 1.0
-                }}>
-                  {/* Checkbox y Estrella */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }} onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      size="small"
-                      checked={selectedEmailIds.includes(email.id)}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        setSelectedEmailIds(prev =>
-                          prev.includes(email.id)
-                            ? prev.filter(id => id !== email.id)
-                            : [...prev, email.id]
-                        );
-                      }}
-                      sx={{ p: 0.2 }}
-                    />
-                    <IconButton size="small" onClick={(e) => handleToggleStar(e, email)} sx={{ p: 0.2, color: email.starred ? '#FACC15' : 'text.disabled' }}>
-                      {email.starred ? <Star sx={{ fontSize: '16px' }} /> : <StarBorder sx={{ fontSize: '16px' }} />}
-                    </IconButton>
-                  </Box>
+                console.log("[TRASH SENT ITEM]", {
+                  id: email.id,
+                  to: email.to,
+                  recipients: email.recipients,
+                  attachments: email.attachments,
+                  labels: email.labels
+                });
+              }
 
-                  {/* Avatar circular (42px) */}
-                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                    <Avatar sx={{ bgcolor: avatarBg, width: 26, height: 26, fontSize: '10.5px', fontWeight: 'bold' }}>
-                      {initial}
-                    </Avatar>
-                  </Box>
+              const isInvalidEmail = !email ||
+                !email.to ||
+                (typeof email.to !== 'string' && !Array.isArray(email.to)) ||
+                !email.subject ||
+                (email.attachments && !Array.isArray(email.attachments)) ||
+                (email.labels && !Array.isArray(email.labels)) ||
+                (email.recipients && !Array.isArray(email.recipients));
 
-                  {/* Remitente (minmax(140px, 200px)) */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-                    <Typography variant="body2" noWrap sx={{ fontWeight: isUnread ? 700 : 500, color: 'text.primary', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '12.5px' }}>
-                      {senderName}
-                    </Typography>
+              if (isInvalidEmail && activeNav === 'eliminados' && trashSubTab === 1 && email) {
+                console.error("[TRASH SENT INVALID EMAIL]", {
+                  id: email.id,
+                  keys: Object.keys(email)
+                });
+              }
 
-                    {isUnread && (
-                      <Box sx={{ px: 0.6, py: 0.05, borderRadius: '3px', bgcolor: 'rgba(59,130,246,0.15)', color: '#3B82F6', fontSize: '8px', fontWeight: 'bold' }}>
-                        NUEVO
+              const normalizedEmail = {
+                ...email,
+                to: normalizeRecipients(email?.to),
+                cc: normalizeRecipients(email?.cc),
+                bcc: normalizeRecipients(email?.bcc),
+                recipients: normalizeRecipients(email?.recipients),
+                attachments: safeArray(email?.attachments),
+                labels: safeArray(email?.labels),
+              };
+
+              const isUnread = !normalizedEmail.read;
+              const fromEmail = normalizedEmail.fromEmail || '';
+
+              let displayName = '';
+              const isSentEmail = normalizedEmail.direction !== 'inbound';
+              if (isSentEmail) {
+                const recipients = normalizedEmail.to;
+                const recipient = recipients[0] || '';
+                const recipientName = recipient
+                  ? (recipient.split('@')[0] || recipient)
+                  : '';
+                displayName = recipientName ? `Para: ${recipientName}` : 'Sin destinatario';
+              } else {
+                displayName = normalizedEmail.fromName || (fromEmail ? fromEmail.split('@')[0] : '') || normalizedEmail.from || 'Remitente';
+              }
+
+              const initial = (displayName.startsWith('Para: ') ? displayName.substring(6) : displayName).charAt(0).toUpperCase() || 'U';
+              const avatarBg = getAvatarColor(displayName);
+
+              // Extraer primer fragmento de contenido para vista previa
+              const previewText = normalizedEmail.text || normalizedEmail.body || normalizedEmail.html?.replace(/<[^>]*>/g, '').substring(0, 100) || '(Sin contenido)';
+
+              return (
+                <EmailRowErrorBoundary key={normalizedEmail.id}>
+                  <Card
+                    variant="outlined"
+                    onClick={() => handleOpenEmail(normalizedEmail)}
+                    sx={{
+                      borderRadius: '6px',
+                      bgcolor: isUnread ? 'action.selected' : 'background.paper',
+                      borderColor: isUnread ? '#3B82F6' : 'divider',
+                      cursor: 'pointer',
+                      transition: 'all 120ms ease-in-out',
+                      height: '48px', // Ultra compacto
+                      display: 'flex',
+                      alignItems: 'center',
+                      mb: 0.4,
+                      '&:hover': {
+                        bgcolor: 'action.hover',
+                        borderColor: 'text.secondary',
+                        '& .quick-actions': { opacity: 1 }
+                      }
+                    }}
+                  >
+                    <CardContent sx={{
+                      p: '0px 12px !important',
+                      width: '100%',
+                      display: 'grid',
+                      gridTemplateColumns: '70px 42px minmax(140px, 200px) minmax(200px, 1fr) 90px 80px',
+                      alignItems: 'center',
+                      gap: 1.0
+                    }}>
+                      {/* Checkbox y Estrella */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }} onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          size="small"
+                          checked={selectedEmailIds.includes(normalizedEmail.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            setSelectedEmailIds(prev =>
+                              prev.includes(normalizedEmail.id)
+                                ? prev.filter(id => id !== normalizedEmail.id)
+                                : [...prev, normalizedEmail.id]
+                            );
+                          }}
+                          sx={{ p: 0.2 }}
+                        />
+                        <IconButton size="small" onClick={(e) => handleToggleStar(e, normalizedEmail)} sx={{ p: 0.2, color: normalizedEmail.starred ? '#FACC15' : 'text.disabled' }}>
+                          {normalizedEmail.starred ? <Star sx={{ fontSize: '16px' }} /> : <StarBorder sx={{ fontSize: '16px' }} />}
+                        </IconButton>
                       </Box>
-                    )}
 
-                    {email.attachments.length > 0 && (
-                      <AttachIcon sx={{ fontSize: '12px', color: 'text.disabled' }} />
-                    )}
-                  </Box>
+                      {/* Avatar circular */}
+                      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                        <Avatar sx={{ bgcolor: avatarBg, width: 26, height: 26, fontSize: '10.5px', fontWeight: 'bold' }}>
+                          {initial}
+                        </Avatar>
+                      </Box>
 
-                  {/* Asunto y vista previa (minmax(200px, 1fr)) */}
-                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.8, minWidth: 0 }}>
-                    <Typography variant="body2" noWrap sx={{ fontWeight: isUnread ? 600 : 400, color: 'text.primary', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '12.5px', flexShrink: 0, mr: 1 }}>
-                      {email.subject || '(Sin asunto)'}
-                    </Typography>
-                    <Typography variant="caption" noWrap sx={{ color: 'text.secondary', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '12px' }}>
-                      — {previewText}
-                    </Typography>
-                  </Box>
+                      {/* Remitente/Destinatario */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                        <Typography variant="body2" noWrap sx={{ fontWeight: isUnread ? 700 : 500, color: 'text.primary', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '12.5px' }}>
+                          {displayName}
+                        </Typography>
 
-                  {/* Fecha (90px) */}
-                  <Box sx={{ textAlign: 'right', pr: 1 }}>
-                    <Typography variant="caption" sx={{ color: isUnread ? '#3B82F6' : 'text.secondary', fontWeight: isUnread ? 700 : 500, fontSize: '11px' }}>
-                      {email.receivedAt.toLocaleDateString('es-PE', { month: 'short', day: 'numeric' })}
-                    </Typography>
-                  </Box>
+                        {isUnread && (
+                          <Box sx={{ px: 0.6, py: 0.05, borderRadius: '3px', bgcolor: 'rgba(59,130,246,0.15)', color: '#3B82F6', fontSize: '8px', fontWeight: 'bold' }}>
+                            NUEVO
+                          </Box>
+                        )}
 
-                  {/* Acciones de hover (80px) */}
-                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                    <Box
-                      className="quick-actions"
-                      onClick={(e) => e.stopPropagation()}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.2,
-                        opacity: 0,
-                        transition: 'opacity 100ms ease-in-out',
-                        bgcolor: 'background.paper',
-                        borderRadius: '4px',
-                        border: '1px solid divider',
-                        p: 0.1
-                      }}
-                    >
-                      {activeNav === 'eliminados' ? (
-                        <>
-                          <Tooltip title="Restaurar">
-                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} sx={{ color: '#3B82F6', p: 0.2 }} aria-label="Restaurar correo">
-                              <RestoreFromTrash sx={{ fontSize: '14px' }} />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Eliminar definitivamente">
-                            <IconButton size="small" onClick={(e) => handleDeleteForeverSingle(e, email)} sx={{ color: '#EF4444', p: 0.2 }} aria-label="Eliminar definitivamente">
-                              <DeleteForever sx={{ fontSize: '14px' }} />
-                            </IconButton>
-                          </Tooltip>
-                        </>
-                      ) : (
-                        <>
-                          <Tooltip title={email.archived ? "Mover a Recibidos" : "Archivar"}>
-                            <IconButton size="small" onClick={(e) => handleToggleArchive(e, email)} sx={{ color: 'text.secondary', p: 0.2 }} aria-label="Archivar correo">
-                              <Archive sx={{ fontSize: '14px' }} />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Eliminar">
-                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} sx={{ color: '#EF4444', p: 0.2 }} aria-label="Eliminar correo">
-                              <Delete sx={{ fontSize: '14px' }} />
-                            </IconButton>
-                          </Tooltip>
-                        </>
-                      )}
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            );
-          })
+                        {safeArray(normalizedEmail.attachments).length > 0 && (
+                          <AttachIcon sx={{ fontSize: '12px', color: 'text.disabled' }} />
+                        )}
+                      </Box>
+
+                      {/* Asunto y vista previa */}
+                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.8, minWidth: 0 }}>
+                        <Typography variant="body2" noWrap sx={{ fontWeight: isUnread ? 600 : 400, color: 'text.primary', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '12.5px', flexShrink: 0, mr: 1 }}>
+                          {normalizedEmail.subject || 'Sin asunto'}
+                        </Typography>
+                        <Typography variant="caption" noWrap sx={{ color: 'text.secondary', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '12px' }}>
+                          — {previewText}
+                        </Typography>
+                      </Box>
+
+                      {/* Fecha */}
+                      <Box sx={{ textAlign: 'right', pr: 1 }}>
+                        <Typography variant="caption" sx={{ color: isUnread ? '#3B82F6' : 'text.secondary', fontWeight: isUnread ? 700 : 500, fontSize: '11px' }}>
+                          {normalizedEmail.receivedAt.toLocaleDateString('es-PE', { month: 'short', day: 'numeric' })}
+                        </Typography>
+                      </Box>
+
+                      {/* Acciones de hover */}
+                      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                        <Box
+                          className="quick-actions"
+                          onClick={(e) => e.stopPropagation()}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.2,
+                            opacity: 0,
+                            transition: 'opacity 100ms ease-in-out',
+                            bgcolor: 'background.paper',
+                            borderRadius: '4px',
+                            border: '1px solid divider',
+                            p: 0.1
+                          }}
+                        >
+                          {activeNav === 'eliminados' ? (
+                            <>
+                              <Tooltip title="Restaurar">
+                                <IconButton size="small" onClick={(e) => handleToggleDelete(e, normalizedEmail)} sx={{ color: '#3B82F6', p: 0.2 }} aria-label="Restaurar correo">
+                                  <RestoreFromTrash sx={{ fontSize: '14px' }} />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Eliminar definitivamente">
+                                <IconButton size="small" onClick={(e) => handleDeleteForeverSingle(e, normalizedEmail)} sx={{ color: '#EF4444', p: 0.2 }} aria-label="Eliminar definitivamente">
+                                  <DeleteForever sx={{ fontSize: '14px' }} />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          ) : (
+                            <>
+                              <Tooltip title={normalizedEmail.archived ? "Mover a Recibidos" : "Archivar"}>
+                                <IconButton size="small" onClick={(e) => handleToggleArchive(e, normalizedEmail)} sx={{ color: 'text.secondary', p: 0.2 }} aria-label="Archivar correo">
+                                  <Archive sx={{ fontSize: '14px' }} />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Eliminar">
+                                <IconButton size="small" onClick={(e) => handleToggleDelete(e, normalizedEmail)} sx={{ color: '#EF4444', p: 0.2 }} aria-label="Eliminar correo">
+                                  <Delete sx={{ fontSize: '14px' }} />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          )}
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </EmailRowErrorBoundary>
+              );
+            });
+          })()
         )}
       </Box>
     </Box>

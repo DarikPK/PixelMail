@@ -35,6 +35,9 @@ export interface EmailData {
 
   // Propiedades calculadas por reglas
   folderId?: string | null;
+  recipients?: any;
+  labels?: any;
+  body?: string;
 }
 
 export interface Folder {
