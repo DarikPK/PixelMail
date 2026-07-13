@@ -78,7 +78,22 @@ import { useEmails } from '../contexts/EmailContext';
 
 const Recibidos = () => {
   const { user, loading: authLoading } = useAuth();
-  const { emails, folders, loading, activeNav, activeFolderId } = useEmails();
+  const {
+    emails,
+    folders,
+    loading,
+    activeNav,
+    activeFolderId,
+    selectedEmailIds,
+    setSelectedEmailIds,
+    bulkMoveToFolder,
+    bulkToggleStar,
+    bulkToggleArchive,
+    bulkToggleRead,
+    bulkMoveToTrash,
+    bulkDeleteForever,
+    bulkRestore
+  } = useEmails();
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [emptying, setEmptying] = useState(false);
 
@@ -86,8 +101,9 @@ const Recibidos = () => {
   const folderParam = searchParams.get('folder');
   const openParam = searchParams.get('open');
 
-  // Menú de "Más opciones" en barra de acciones
+  // Menús de barra de acciones
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
+  const [moveToAnchorEl, setMoveToAnchorEl] = useState<null | HTMLElement>(null);
 
   // Sincronizar apertura de correos desde la barra lateral (mini preview)
   useEffect(() => {
@@ -431,65 +447,192 @@ const Recibidos = () => {
         </Tabs>
       </Box>
 
-      {/* Barra de acciones horizontal */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 0.8, py: 0.6, px: 0.2, borderBottom: '1px solid', borderColor: 'divider', mb: 1.0 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
-          <Checkbox size="small" disabled sx={{ color: 'text.disabled', p: 0.2 }} />
-          <Divider orientation="vertical" flexItem sx={{ borderColor: 'divider', mx: 0.2 }} />
-          <Tooltip title="Actualizar">
-            <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} onClick={() => window.location.reload()}>
-              <Refresh sx={{ fontSize: '16px' }} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Filtrar">
-            <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} disabled>
-              <FilterList sx={{ fontSize: '16px' }} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Más opciones">
-            <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} onClick={(e) => setActionsAnchorEl(e.currentTarget)}>
-              <MoreVert sx={{ fontSize: '16px' }} />
-            </IconButton>
-          </Tooltip>
+      {/* Barra de acciones horizontal (Selección múltiple e indeterminada) */}
+      {(() => {
+        const allVisibleIds = filteredEmails.map(e => e.id);
+        const areAllSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selectedEmailIds.includes(id));
+        const isIndeterminate = allVisibleIds.length > 0 && allVisibleIds.some(id => selectedEmailIds.includes(id)) && !areAllSelected;
 
-          <Menu
-            anchorEl={actionsAnchorEl}
-            open={Boolean(actionsAnchorEl)}
-            onClose={() => setActionsAnchorEl(null)}
-            slotProps={{
-              paper: {
-                sx: {
-                  borderRadius: '8px',
-                  border: '1px solid divider',
-                  p: 0.2
-                }
-              }
-            }}
-          >
-            <MenuItem onClick={() => setActionsAnchorEl(null)} disabled sx={{ borderRadius: '4px', fontSize: '11.5px', py: 0.5 }}>Marcar todos como leídos</MenuItem>
-            <MenuItem onClick={() => setActionsAnchorEl(null)} disabled sx={{ borderRadius: '4px', fontSize: '11.5px', py: 0.5 }}>Seleccionar todo</MenuItem>
-          </Menu>
-        </Box>
+        const handleSelectAllToggle = () => {
+          if (areAllSelected) {
+            setSelectedEmailIds(prev => prev.filter(id => !allVisibleIds.includes(id)));
+          } else {
+            setSelectedEmailIds(prev => {
+              const otherSelected = prev.filter(id => !allVisibleIds.includes(id));
+              return [...otherSelected, ...allVisibleIds];
+            });
+          }
+        };
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-          <Tooltip title="Cambiar vista">
-            <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} disabled>
-              <ViewList sx={{ fontSize: '16px' }} />
-            </IconButton>
-          </Tooltip>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
-            <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 600, fontSize: '10.5px' }}>
-              1-{filteredEmails.length} de {filteredEmails.length}
-            </Typography>
-            <IconButton size="small" sx={{ color: 'text.disabled', p: 0.3 }} disabled>
-              <ChevronLeft sx={{ fontSize: '16px' }} />
-            </IconButton>
-            <IconButton size="small" sx={{ color: 'text.disabled', p: 0.3 }} disabled>
-              <ChevronRight sx={{ fontSize: '16px' }} />
-            </IconButton>
+        const hasSelection = selectedEmailIds.length > 0;
+
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 0.8, py: 0.6, px: 0.2, borderBottom: '1px solid', borderColor: 'divider', mb: 1.0, minHeight: '38px' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Checkbox
+                size="small"
+                checked={areAllSelected}
+                indeterminate={isIndeterminate}
+                onChange={handleSelectAllToggle}
+                sx={{ p: 0.2 }}
+              />
+              <Divider orientation="vertical" flexItem sx={{ borderColor: 'divider', mx: 0.2 }} />
+
+              {hasSelection ? (
+                // ACCIONES MASIVAS CONTEXTUALES
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flexWrap: 'wrap' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: '11px', color: 'text.secondary', mr: 1 }}>
+                    {selectedEmailIds.length} seleccionados
+                  </Typography>
+
+                  {/* Acciones para Eliminados */}
+                  {activeNav === 'eliminados' ? (
+                    <>
+                      <Button size="small" variant="contained" color="primary" onClick={bulkRestore} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                        Restaurar
+                      </Button>
+                      <Button size="small" variant="contained" color="error" onClick={bulkDeleteForever} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                        Eliminar definitivamente
+                      </Button>
+                    </>
+                  ) : (
+                    // Acciones generales para recibidos, archivados, destacados, folders
+                    <>
+                      <Button size="small" variant="outlined" onClick={bulkMoveToTrash} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                        Eliminar
+                      </Button>
+
+                      {activeNav === 'archivados' ? (
+                        <Button size="small" variant="outlined" onClick={() => bulkToggleArchive(false)} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                          Desarchivar
+                        </Button>
+                      ) : (
+                        <Button size="small" variant="outlined" onClick={() => bulkToggleArchive(true)} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                          Archivar
+                        </Button>
+                      )}
+
+                      <Button size="small" variant="outlined" onClick={() => bulkToggleStar(true)} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                        Destacar
+                      </Button>
+                      <Button size="small" variant="outlined" onClick={() => bulkToggleStar(false)} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                        Quitar destacado
+                      </Button>
+
+                      <Button size="small" variant="outlined" onClick={() => bulkToggleRead(true)} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                        Marcar leído
+                      </Button>
+                      <Button size="small" variant="outlined" onClick={() => bulkToggleRead(false)} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                        Marcar no leído
+                      </Button>
+
+                      {/* Menú desplegable Mover a */}
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={(e) => setMoveToAnchorEl(e.currentTarget)}
+                        sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px', background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)' }}
+                      >
+                        Mover a...
+                      </Button>
+                      <Menu
+                        anchorEl={moveToAnchorEl}
+                        open={Boolean(moveToAnchorEl)}
+                        onClose={() => setMoveToAnchorEl(null)}
+                        slotProps={{
+                          paper: {
+                            sx: {
+                              borderRadius: '8px',
+                              border: '1px solid divider',
+                              p: 0.3
+                            }
+                          }
+                        }}
+                      >
+                        {activeNav !== 'recibidos' && (
+                          <MenuItem onClick={async () => { setMoveToAnchorEl(null); await bulkMoveToFolder(null); }} sx={{ fontSize: '12px', py: 0.4 }}>
+                            Bandeja de Entrada
+                          </MenuItem>
+                        )}
+                        {activeNav !== 'archivados' && (
+                          <MenuItem onClick={async () => { setMoveToAnchorEl(null); await bulkToggleArchive(true); }} sx={{ fontSize: '12px', py: 0.4 }}>
+                            Archivados
+                          </MenuItem>
+                        )}
+                        {folders.map((f) => (
+                          <MenuItem key={f.id} onClick={async () => { setMoveToAnchorEl(null); await bulkMoveToFolder(f.id); }} sx={{ fontSize: '12px', py: 0.4 }}>
+                            {f.name}
+                          </MenuItem>
+                        ))}
+                      </Menu>
+                    </>
+                  )}
+
+                  <Button size="small" variant="text" onClick={() => setSelectedEmailIds([])} sx={{ fontSize: '10.5px', color: 'text.secondary', textTransform: 'none', height: '26px' }}>
+                    Cancelar
+                  </Button>
+                </Box>
+              ) : (
+                // ACCIONES ESTÁNDAR
+                <>
+                  <Tooltip title="Actualizar">
+                    <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} onClick={() => window.location.reload()}>
+                      <Refresh sx={{ fontSize: '16px' }} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Filtrar">
+                    <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} disabled>
+                      <FilterList sx={{ fontSize: '16px' }} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Más opciones">
+                    <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} onClick={(e) => setActionsAnchorEl(e.currentTarget)}>
+                      <MoreVert sx={{ fontSize: '16px' }} />
+                    </IconButton>
+                  </Tooltip>
+
+                  <Menu
+                    anchorEl={actionsAnchorEl}
+                    open={Boolean(actionsAnchorEl)}
+                    onClose={() => setActionsAnchorEl(null)}
+                    slotProps={{
+                      paper: {
+                        sx: {
+                          borderRadius: '8px',
+                          border: '1px solid divider',
+                          p: 0.2
+                        }
+                      }
+                    }}
+                  >
+                    <MenuItem onClick={() => setActionsAnchorEl(null)} disabled sx={{ borderRadius: '4px', fontSize: '11.5px', py: 0.5 }}>Marcar todos como leídos</MenuItem>
+                    <MenuItem onClick={() => setActionsAnchorEl(null)} disabled sx={{ borderRadius: '4px', fontSize: '11.5px', py: 0.5 }}>Seleccionar todo</MenuItem>
+                  </Menu>
+                </>
+              )}
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+              <Tooltip title="Cambiar vista">
+                <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} disabled>
+                  <ViewList sx={{ fontSize: '16px' }} />
+                </IconButton>
+              </Tooltip>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
+                <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 600, fontSize: '10.5px' }}>
+                  1-{filteredEmails.length} de {filteredEmails.length}
+                </Typography>
+                <IconButton size="small" sx={{ color: 'text.disabled', p: 0.3 }} disabled>
+                  <ChevronLeft sx={{ fontSize: '16px' }} />
+                </IconButton>
+                <IconButton size="small" sx={{ color: 'text.disabled', p: 0.3 }} disabled>
+                  <ChevronRight sx={{ fontSize: '16px' }} />
+                </IconButton>
+              </Box>
+            </Box>
           </Box>
-        </Box>
-      </Box>
+        );
+      })()}
 
       {/* Listado de Filas de Correo compactadas (CSS Grid) */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4 }}>
@@ -544,7 +687,19 @@ const Recibidos = () => {
                 }}>
                   {/* Selección y estrella (70px) */}
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }} onClick={(e) => e.stopPropagation()}>
-                    <Checkbox size="small" disabled sx={{ color: 'text.disabled', p: 0.2 }} />
+                    <Checkbox
+                      size="small"
+                      checked={selectedEmailIds.includes(email.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setSelectedEmailIds(prev =>
+                          prev.includes(email.id)
+                            ? prev.filter(id => id !== email.id)
+                            : [...prev, email.id]
+                        );
+                      }}
+                      sx={{ p: 0.2 }}
+                    />
                     <IconButton size="small" onClick={(e) => handleToggleStar(e, email)} sx={{ p: 0.2, color: email.starred ? '#FACC15' : 'text.disabled' }}>
                       {email.starred ? <Star sx={{ fontSize: '16px' }} /> : <StarBorder sx={{ fontSize: '16px' }} />}
                     </IconButton>

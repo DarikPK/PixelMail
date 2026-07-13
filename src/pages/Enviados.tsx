@@ -7,17 +7,21 @@ import {
   CardContent,
   Avatar,
   IconButton,
-  Tooltip
+  Tooltip,
+  Button,
+  Checkbox,
+  Divider
 } from '@mui/material';
 import {
-  Send as SendIcon,
   Attachment as AttachIcon,
-  Delete
+  Delete,
+  DeleteOutlined as DeleteIcon
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { useEmails } from '../contexts/EmailContext';
 
 interface EmailData {
   id: string;
@@ -44,6 +48,7 @@ const getAvatarColor = (name: string) => {
 
 const Enviados = () => {
   const { user } = useAuth();
+  const { selectedEmailIds, setSelectedEmailIds, bulkMoveToTrash, bulkToggleStar } = useEmails();
   const [emails, setEmails] = useState<EmailData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -60,8 +65,8 @@ const Enviados = () => {
       const emailsData: EmailData[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        // Filtrar en memoria por enviados (direction != inbound) por robustez
-        if (data.direction !== 'inbound') {
+        // Filtrar en memoria por enviados (direction != inbound) y no eliminados
+        if (data.direction !== 'inbound' && !data.deleted) {
           emailsData.push({
             id: doc.id,
             to: data.to || '',
@@ -86,22 +91,126 @@ const Enviados = () => {
 
   const handleDeleteSent = async (e: React.MouseEvent, emailId: string) => {
     e.stopPropagation();
-    const confirmMessage = "¿Deseas eliminar este registro de correo enviado?\n\nEsta acción no se puede deshacer de forma sencilla.";
+    const confirmMessage = "¿Deseas mover este correo enviado a la papelera?";
     if (!window.confirm(confirmMessage)) return;
 
     try {
-      await deleteDoc(doc(db, 'emails', emailId));
-      console.log(`[FIRESTORE] Correo enviado ${emailId} eliminado.`);
+      await updateDoc(doc(db, 'emails', emailId), {
+        deleted: true,
+        deletedAt: new Date(),
+        previousFolder: 'sent'
+      });
+      console.log(`[FIRESTORE] Correo enviado ${emailId} movido a la papelera.`);
     } catch (err) {
-      console.error("Error al borrar correo enviado:", err);
+      console.error("Error al mover correo enviado a papelera:", err);
+    }
+  };
+
+  const handleMoveAllToTrash = async () => {
+    const confirmMessage = "¿Mover todos los correos enviados a la papelera?\n\nPodrás restaurarlos o eliminarlos definitivamente desde Eliminados.";
+    if (!window.confirm(confirmMessage)) return;
+
+    const batch = writeBatch(db);
+    emails.forEach((email) => {
+      const docRef = doc(db, 'emails', email.id);
+      batch.update(docRef, {
+        deleted: true,
+        deletedAt: new Date(),
+        previousFolder: 'sent'
+      });
+    });
+
+    try {
+      await batch.commit();
+      console.log("[FIRESTORE] Todos los enviados movidos a papelera.");
+    } catch (err) {
+      console.error("Error al mover todos los enviados a papelera:", err);
     }
   };
 
   return (
     <Box sx={{ animation: 'fadeIn 200ms ease-in-out' }}>
-      <Typography variant="h3" sx={{ fontWeight: 700, color: 'text.primary', letterSpacing: '-0.5px', fontSize: { xs: '22px', md: '26px' }, lineHeight: 1.2, mb: 1.5 }}>
-        Correos Enviados
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.0, mb: 1.5 }}>
+        <Typography variant="h3" sx={{ fontWeight: 700, color: 'text.primary', letterSpacing: '-0.5px', fontSize: { xs: '22px', md: '26px' }, lineHeight: 1.2 }}>
+          Correos Enviados
+        </Typography>
+
+        {emails.length > 0 && (
+          <Button
+            variant="contained"
+            color="warning"
+            startIcon={<DeleteIcon sx={{ fontSize: '18px' }} />}
+            onClick={handleMoveAllToTrash}
+            sx={{
+              borderRadius: '10px',
+              py: 0.6,
+              px: 2.0,
+              fontSize: '13px',
+              fontWeight: 'bold',
+              transition: 'all 150ms ease-in-out',
+              boxShadow: '0 4px 10px rgba(245, 158, 11, 0.2)',
+              '&:hover': {
+                transform: 'scale(1.02)'
+              }
+            }}
+          >
+            Mover todos a papelera
+          </Button>
+        )}
+      </Box>
+
+      {/* Barra de acciones horizontal para Enviados */}
+      {(() => {
+        const allVisibleIds = emails.map(e => e.id);
+        const areAllSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selectedEmailIds.includes(id));
+        const isIndeterminate = allVisibleIds.length > 0 && allVisibleIds.some(id => selectedEmailIds.includes(id)) && !areAllSelected;
+
+        const handleSelectAllToggle = () => {
+          if (areAllSelected) {
+            setSelectedEmailIds(prev => prev.filter(id => !allVisibleIds.includes(id)));
+          } else {
+            setSelectedEmailIds(prev => {
+              const otherSelected = prev.filter(id => !allVisibleIds.includes(id));
+              return [...otherSelected, ...allVisibleIds];
+            });
+          }
+        };
+
+        const hasSelection = selectedEmailIds.length > 0;
+
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.6, px: 0.2, borderBottom: '1px solid', borderColor: 'divider', mb: 1.0, minHeight: '38px' }}>
+            <Checkbox
+              size="small"
+              checked={areAllSelected}
+              indeterminate={isIndeterminate}
+              onChange={handleSelectAllToggle}
+              sx={{ p: 0.2 }}
+            />
+            <Divider orientation="vertical" flexItem sx={{ borderColor: 'divider', mx: 0.2 }} />
+
+            {hasSelection ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: '11px', color: 'text.secondary' }}>
+                  {selectedEmailIds.length} seleccionados
+                </Typography>
+                <Button size="small" variant="outlined" onClick={bulkMoveToTrash} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                  Eliminar
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => bulkToggleStar(true)} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                  Destacar
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => bulkToggleStar(false)} sx={{ fontSize: '10.5px', py: 0.3, px: 1.2, textTransform: 'none', height: '26px' }}>
+                  Quitar destacado
+                </Button>
+                <Button size="small" variant="text" onClick={() => setSelectedEmailIds([])} sx={{ fontSize: '10.5px', color: 'text.secondary', textTransform: 'none', height: '26px' }}>
+                  Cancelar
+                </Button>
+              </Box>
+            ) : null}
+          </Box>
+        );
+      })()}
 
       {/* Listado de Filas de Correos Enviados compactadas (CSS Grid) */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4, mt: 1.5 }}>
@@ -151,9 +260,21 @@ const Enviados = () => {
                   alignItems: 'center',
                   gap: 1.0
                 }}>
-                  {/* Icono de envíos */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.2 }}>
-                    <SendIcon sx={{ color: '#3B82F6', fontSize: '15px' }} />
+                  {/* Checkbox de selección */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.2 }} onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      size="small"
+                      checked={selectedEmailIds.includes(email.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setSelectedEmailIds(prev =>
+                          prev.includes(email.id)
+                            ? prev.filter(id => id !== email.id)
+                            : [...prev, email.id]
+                        );
+                      }}
+                      sx={{ p: 0.2 }}
+                    />
                   </Box>
 
                   {/* Avatar del destinatario (reducido a 26px) */}
