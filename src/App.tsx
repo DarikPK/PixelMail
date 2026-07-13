@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme, CssBaseline, useMediaQuery } from '@mui/material';
+import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
@@ -11,45 +11,70 @@ import Recibidos from './pages/Recibidos';
 import { useMemo } from 'react';
 
 function App() {
-  const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
-
   const theme = useMemo(
     () =>
       createTheme({
         palette: {
-          mode: prefersDarkMode ? 'dark' : 'light',
+          mode: 'dark',
           primary: {
-            main: '#1976d2',
+            main: '#3B82F6', // Azul principal
           },
           secondary: {
-            main: '#dc004e',
+            main: '#EF4444', // Rojo
+          },
+          success: {
+            main: '#22C55E', // Verde
+          },
+          warning: {
+            main: '#FACC15', // Amarillo
           },
           background: {
-            default: prefersDarkMode ? '#121212' : '#f8f9fa',
-            paper: prefersDarkMode ? '#1e1e1e' : '#ffffff',
+            default: '#0F1117', // Background principal
+            paper: '#1B2130',   // Cards / Papeles
           },
+          text: {
+            primary: '#FFFFFF',
+            secondary: '#B8C1D1',
+            disabled: '#6F7A8A',
+          },
+          divider: 'rgba(255,255,255,0.08)', // Separadores
         },
         typography: {
-          fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+          fontFamily: '"Inter", "Manrope", "Roboto", sans-serif',
+          h4: {
+            fontWeight: 700,
+          },
           h5: {
+            fontWeight: 700,
+          },
+          subtitle1: {
             fontWeight: 600,
           },
+          body1: {
+            fontSize: '16px',
+          },
+          body2: {
+            fontSize: '14px',
+          }
         },
         components: {
           MuiButton: {
             styleOverrides: {
               root: {
                 textTransform: 'none',
-                borderRadius: 8,
+                borderRadius: '12px',
                 fontWeight: 500,
+                transition: 'all 180ms ease-in-out',
               },
             },
           },
           MuiPaper: {
             styleOverrides: {
               root: {
-                borderRadius: 12,
-                boxShadow: prefersDarkMode ? 'none' : '0px 2px 4px rgba(0,0,0,0.05)',
+                borderRadius: '16px',
+                backgroundImage: 'none',
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+                border: '1px solid rgba(255,255,255,0.08)',
               },
             },
           },
@@ -61,7 +86,7 @@ function App() {
           },
         },
       }),
-    [prefersDarkMode],
+    [],
   );
 
   return (

@@ -11,7 +11,8 @@ import {
   Snackbar,
   CircularProgress,
   Tabs,
-  Tab
+  Tab,
+  Divider
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import Editor from '../components/Editor';
@@ -19,6 +20,7 @@ import AttachmentManager from '../components/AttachmentManager';
 import type { AttachmentItem } from '../components/AttachmentManager';
 import { db } from '../config/firebase';
 import { collection, addDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { Send as SendIcon } from '@mui/icons-material';
 
 const Redactar = () => {
   const { user } = useAuth();
@@ -239,12 +241,12 @@ const Redactar = () => {
   };
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto' }}>
-      <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
+    <Box sx={{ maxWidth: 900, mx: 'auto', animation: 'fadeIn 200ms ease-in-out' }}>
+      <Typography variant="h3" sx={{ fontWeight: 800, color: '#FFFFFF', letterSpacing: '-1px', mb: 3 }}>
         Redactar Correo
       </Typography>
 
-      <Paper component="form" onSubmit={handleSubmit} autoComplete="off" sx={{ p: 3, mt: 2 }}>
+      <Paper component="form" onSubmit={handleSubmit} autoComplete="off" sx={{ p: 4, borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', bgcolor: '#131722' }}>
         {/* Inputs señuelo invisibles al principio del formulario para absorber el autorrelleno de Chrome */}
         <input
           type="text"
@@ -261,7 +263,7 @@ const Redactar = () => {
           tabIndex={-1}
         />
 
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>{error}</Alert>}
 
         <TextField
           fullWidth
@@ -270,6 +272,11 @@ const Redactar = () => {
           disabled
           margin="normal"
           variant="filled"
+          slotProps={{
+            input: {
+              sx: { borderRadius: '12px', bgcolor: 'rgba(255,255,255,0.02)' }
+            }
+          }}
         />
 
         <TextField
@@ -307,11 +314,14 @@ const Redactar = () => {
               inputMode: "email",
               readOnly: true,
               onFocus: handleUnlockInput
+            },
+            input: {
+              sx: { borderRadius: '12px' }
             }
           }}
         />
 
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
           <TextField
             fullWidth
             label="CC"
@@ -346,6 +356,9 @@ const Redactar = () => {
                 inputMode: "email",
                 readOnly: true,
                 onFocus: handleUnlockInput
+              },
+              input: {
+                sx: { borderRadius: '12px' }
               }
             }}
           />
@@ -383,6 +396,9 @@ const Redactar = () => {
                 inputMode: "email",
                 readOnly: true,
                 onFocus: handleUnlockInput
+              },
+              input: {
+                sx: { borderRadius: '12px' }
               }
             }}
           />
@@ -396,12 +412,17 @@ const Redactar = () => {
           margin="normal"
           required
           disabled={sending}
+          slotProps={{
+            input: {
+              sx: { borderRadius: '12px' }
+            }
+          }}
         />
 
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'rgba(255,255,255,0.08)', mb: 2, mt: 2 }}>
           <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
-            <Tab label="Redactar" />
-            <Tab label="Vista Previa" />
+            <Tab label="Redactar" sx={{ color: '#B8C1D1', '&.Mui-selected': { color: '#3B82F6' } }} />
+            <Tab label="Vista Previa" sx={{ color: '#B8C1D1', '&.Mui-selected': { color: '#3B82F6' } }} />
           </Tabs>
         </Box>
 
@@ -420,20 +441,22 @@ const Redactar = () => {
         ) : (
           <Box
             sx={{
-              p: 2,
-              border: 1,
-              borderColor: 'divider',
-              borderRadius: 1,
+              p: 3,
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '12px',
               minHeight: 300,
-              bgcolor: '#f9f9f9',
+              bgcolor: 'rgba(255,255,255,0.01)',
               mt: 2,
-              mb: 1
+              mb: 1,
+              color: '#FFFFFF'
             }}
             dangerouslySetInnerHTML={{ __html: addSignature ? `${message}<br><br>--<br>${signature}` : message }}
           />
         )}
 
-        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', my: 3 }} />
+
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
           <FormControlLabel
             control={
               <Switch
@@ -444,13 +467,26 @@ const Redactar = () => {
               />
             }
             label="Agregar firma"
+            sx={{ color: '#B8C1D1' }}
           />
 
           <Button
             type="submit"
             variant="contained"
             size="large"
-            sx={{ minWidth: 150 }}
+            endIcon={sending ? null : <SendIcon />}
+            sx={{
+              minWidth: 160,
+              py: 1.2,
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+              fontWeight: 'bold',
+              color: '#FFFFFF',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)',
+              }
+            }}
             disabled={sending}
           >
             {sending ? <CircularProgress size={24} color="inherit" /> : 'Enviar'}
@@ -464,7 +500,7 @@ const Redactar = () => {
         onClose={() => setSuccess(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={() => setSuccess(false)} severity="success" sx={{ width: '100%' }}>
+        <Alert onClose={() => setSuccess(false)} severity="success" sx={{ width: '100%', borderRadius: '12px' }}>
           Correo enviado con éxito
         </Alert>
       </Snackbar>

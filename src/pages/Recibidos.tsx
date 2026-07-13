@@ -2,34 +2,40 @@ import {
   Box,
   Typography,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   CircularProgress,
   IconButton,
   Tabs,
   Tab,
   Tooltip,
-  Button
+  Button,
+  Checkbox,
+  Avatar,
+  Card,
+  CardContent,
+  Divider,
+  Menu,
+  MenuItem
 } from '@mui/material';
 import {
   Star,
   StarBorder,
   Archive,
   Delete,
-  Mail,
-  Drafts,
   Attachment as AttachIcon,
   RestoreFromTrash,
-  DeleteForever
+  DeleteForever,
+  Refresh,
+  FilterList,
+  MoreVert,
+  ViewList,
+  ChevronLeft,
+  ChevronRight
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { useSearchParams } from 'react-router-dom';
 import EmailViewer from '../components/EmailViewer';
 
 interface EmailData {
@@ -54,6 +60,20 @@ interface EmailData {
   deleted: boolean;
 }
 
+// Colores suaves de avatares estilo Gmail
+const avatarColors = [
+  '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'
+];
+
+const getAvatarColor = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % avatarColors.length;
+  return avatarColors[index];
+};
+
 const Recibidos = () => {
   const { user, loading: authLoading } = useAuth();
   const [emails, setEmails] = useState<EmailData[]>([]);
@@ -61,6 +81,20 @@ const Recibidos = () => {
   const [tabValue, setTabValue] = useState(0); // 0: Recibidos, 1: Destacados, 2: Archivados, 3: Eliminados
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [emptying, setEmptying] = useState(false);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+
+  // Menú de "Más opciones" en barra de acciones
+  const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
+
+  useEffect(() => {
+    if (tabParam !== null) {
+      setTabValue(parseInt(tabParam, 10));
+    } else {
+      setTabValue(0);
+    }
+  }, [tabParam]);
 
   useEffect(() => {
     // 2. Esperar a que Firebase Authentication termine de cargar
@@ -190,17 +224,6 @@ const Recibidos = () => {
     }
   };
 
-  const handleToggleRead = async (e: React.MouseEvent, email: EmailData) => {
-    e.stopPropagation();
-    try {
-      await updateDoc(doc(db, 'emails', email.id), {
-        read: !email.read
-      });
-    } catch (error) {
-      console.error("[PIXEL MAIL INBOX] Error toggling read:", error);
-    }
-  };
-
   const handleToggleArchive = async (e: React.MouseEvent, email: EmailData) => {
     e.stopPropagation();
     try {
@@ -318,6 +341,11 @@ const Recibidos = () => {
     }
   };
 
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+    setSearchParams({ tab: newValue.toString() });
+  };
+
   if (authLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -388,133 +416,291 @@ const Recibidos = () => {
     );
   }
 
+  const tabLabels = [
+    { label: "RECIBIDOS", count: emails.length },
+    { label: "DESTACADOS", count: emails.length },
+    { label: "ARCHIVADOS", count: emails.length },
+    { label: "ELIMINADOS", count: emails.length }
+  ];
+
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 1 }}>
-        <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+    <Box sx={{ animation: 'fadeIn 200ms ease-in-out' }}>
+      {/* Título de la sección */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+        <Typography variant="h3" sx={{ fontWeight: 800, color: '#FFFFFF', letterSpacing: '-1px' }}>
           Bandeja de Entrada
         </Typography>
 
-        {/* Botón Vaciar Papelera: aparece únicamente en la pestaña de Eliminados y si hay correos */}
+        {/* Botón Vaciar Papelera con diseño Premium */}
         {tabValue === 3 && emails.length > 0 && (
           <Button
             variant="contained"
             color="error"
-            size="small"
             startIcon={emptying ? <CircularProgress size={16} color="inherit" /> : <DeleteForever />}
             onClick={handleEmptyTrash}
             disabled={emptying}
+            sx={{
+              borderRadius: '12px',
+              py: 1,
+              px: 2.5,
+              fontWeight: 'bold',
+              transition: 'all 150ms ease-in-out',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)',
+              '&:hover': {
+                transform: 'scale(1.02)'
+              }
+            }}
             aria-label="Vaciar papelera"
           >
-            {emptying ? "Vaciando..." : "Vaciar papelera"}
+            {emptying ? "Vaciando..." : `Vaciar papelera (${emails.length})`}
           </Button>
         )}
       </Box>
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
-        <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
-          <Tab label="Recibidos" />
-          <Tab label="Destacados" />
-          <Tab label="Archivados" />
-          <Tab label="Eliminados" />
+      {/* Pestañas de la Bandeja */}
+      <Box sx={{ borderBottom: '1px solid', borderColor: 'rgba(255,255,255,0.08)' }}>
+        <Tabs
+          value={tabValue}
+          onChange={handleTabChange}
+          sx={{
+            '& .MuiTabs-indicator': {
+              height: '3px',
+              bgcolor: '#3B82F6',
+              borderRadius: '3px 3px 0 0'
+            }
+          }}
+        >
+          {tabLabels.map((tab, idx) => {
+            const isActive = tabValue === idx;
+            return (
+              <Tab
+                key={tab.label}
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, letterSpacing: '0.5px' }}>
+                      {tab.label}
+                    </Typography>
+                    {tab.count > 0 && (
+                      <Box sx={{ display: 'inline-flex', px: 1, py: 0.2, borderRadius: '10px', bgcolor: isActive ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)', color: isActive ? '#3B82F6' : '#B8C1D1', fontSize: '11px', fontWeight: 'bold' }}>
+                        {tab.count}
+                      </Box>
+                    )}
+                  </Box>
+                }
+                sx={{
+                  color: isActive ? '#3B82F6 !important' : '#B8C1D1',
+                  py: 2,
+                  minWidth: 'auto',
+                  transition: 'color 150ms ease-in-out',
+                  '&:hover': { color: '#FFFFFF' }
+                }}
+              />
+            );
+          })}
         </Tabs>
       </Box>
 
-      <TableContainer component={Paper} sx={{ mt: 2 }}>
-        <Table sx={{ minWidth: 650 }} aria-label="tabla de correos recibidos">
-          <TableHead sx={{ bgcolor: 'action.hover' }}>
-            <TableRow>
-              <TableCell sx={{ width: 80 }}></TableCell>
-              <TableCell sx={{ fontWeight: 'bold', width: 220 }}>Remitente</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Asunto</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Adjuntos</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', width: 180 }}>Fecha</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', width: 120 }}>Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                  <CircularProgress size={24} />
-                </TableCell>
-              </TableRow>
-            ) : emails.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                  <Typography variant="body1" color="text.secondary">
-                    No hay correos en esta sección.
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              emails.map((email) => {
-                const isUnread = !email.read;
-                return (
-                  <TableRow
-                    key={email.id}
-                    hover
-                    onClick={() => handleOpenEmail(email)}
-                    sx={{
-                      cursor: 'pointer',
-                      bgcolor: isUnread ? 'action.selected' : 'inherit',
-                      fontWeight: isUnread ? 'bold' : 'normal'
-                    }}
-                  >
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <IconButton size="small" onClick={(e) => handleToggleStar(e, email)} aria-label="Destacar">
-                        {email.starred ? <Star color="warning" /> : <StarBorder />}
-                      </IconButton>
-                      <IconButton size="small" onClick={(e) => handleToggleRead(e, email)} aria-label="Cambiar leido">
-                        {email.read ? <Drafts color="action" /> : <Mail color="primary" />}
-                      </IconButton>
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: isUnread ? 'bold' : 'normal' }}>
-                      {email.fromName || email.fromEmail || email.from}
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: isUnread ? 'bold' : 'normal' }}>
-                      {email.subject}
-                    </TableCell>
-                    <TableCell align="center">
-                      {email.attachments.length > 0 && <AttachIcon fontSize="small" color="action" />}
-                    </TableCell>
-                    <TableCell>{email.receivedAt.toLocaleString()}</TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+      {/* Barra de acciones horizontal */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, py: 2, px: 1, borderBottom: '1px solid', borderColor: 'rgba(255,255,255,0.08)', mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Checkbox size="small" disabled sx={{ color: '#6F7A8A', p: 0.5 }} />
+          <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.08)', mx: 0.5 }} />
+          <Tooltip title="Actualizar">
+            <IconButton size="small" sx={{ color: '#B8C1D1' }} onClick={() => setLoading(true)}>
+              <Refresh fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Filtrar">
+            <IconButton size="small" sx={{ color: '#B8C1D1' }} disabled>
+              <FilterList fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Más opciones">
+            <IconButton size="small" sx={{ color: '#B8C1D1' }} onClick={(e) => setActionsAnchorEl(e.currentTarget)}>
+              <MoreVert fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
+          <Menu
+            anchorEl={actionsAnchorEl}
+            open={Boolean(actionsAnchorEl)}
+            onClose={() => setActionsAnchorEl(null)}
+            slotProps={{
+              paper: {
+                sx: {
+                  borderRadius: '12px',
+                  bgcolor: '#1B2130',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  p: 0.5
+                }
+              }
+            }}
+          >
+            <MenuItem onClick={() => setActionsAnchorEl(null)} disabled sx={{ borderRadius: '8px', fontSize: '13px' }}>Marcar todos como leídos</MenuItem>
+            <MenuItem onClick={() => setActionsAnchorEl(null)} disabled sx={{ borderRadius: '8px', fontSize: '13px' }}>Seleccionar todo</MenuItem>
+          </Menu>
+        </Box>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Tooltip title="Cambiar vista">
+            <IconButton size="small" sx={{ color: '#B8C1D1' }} disabled>
+              <ViewList fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600 }}>
+              1-{emails.length} de {emails.length}
+            </Typography>
+            <IconButton size="small" sx={{ color: '#6F7A8A' }} disabled>
+              <ChevronLeft fontSize="small" />
+            </IconButton>
+            <IconButton size="small" sx={{ color: '#6F7A8A' }} disabled>
+              <ChevronRight fontSize="small" />
+            </IconButton>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Listado de Tarjetas Modernas de Correo */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <CircularProgress size={36} />
+          </Box>
+        ) : emails.length === 0 ? (
+          <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)' }}>
+            <Typography variant="body1" color="text.secondary">
+              No hay correos en esta sección.
+            </Typography>
+          </Paper>
+        ) : (
+          emails.map((email) => {
+            const isUnread = !email.read;
+            const senderName = email.fromName || email.fromEmail.split('@')[0] || email.from;
+            const initial = senderName.charAt(0).toUpperCase();
+            const avatarBg = getAvatarColor(senderName);
+
+            // Extraer primer fragmento de contenido para vista previa
+            const previewText = email.text || email.html?.replace(/<[^>]*>/g, '').substring(0, 100) || '(Sin contenido)';
+
+            return (
+              <Card
+                key={email.id}
+                variant="outlined"
+                onClick={() => handleOpenEmail(email)}
+                sx={{
+                  borderRadius: '16px',
+                  bgcolor: isUnread ? '#1B2130' : 'rgba(255,255,255,0.02)',
+                  borderColor: isUnread ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.08)',
+                  cursor: 'pointer',
+                  transition: 'all 180ms ease-in-out',
+                  '&:hover': {
+                    bgcolor: '#242C3D',
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 8px 16px -2px rgba(0,0,0,0.3)',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    '& .quick-actions': { opacity: 1 }
+                  }
+                }}
+              >
+                <CardContent sx={{ p: '16px !important', display: 'flex', alignItems: 'center', gap: 2, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                  {/* Checkbox y Estrella */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} onClick={(e) => e.stopPropagation()}>
+                    <Checkbox size="small" disabled sx={{ color: 'rgba(255,255,255,0.15)', p: 0.5 }} />
+                    <IconButton size="small" onClick={(e) => handleToggleStar(e, email)} sx={{ p: 0.5, color: email.starred ? '#FACC15' : 'rgba(255,255,255,0.15)' }}>
+                      {email.starred ? <Star /> : <StarBorder />}
+                    </IconButton>
+                  </Box>
+
+                  {/* Avatar circular estilo Gmail */}
+                  <Avatar sx={{ bgcolor: avatarBg, width: 40, height: 40, fontSize: '14px', fontWeight: 'bold' }}>
+                    {initial}
+                  </Avatar>
+
+                  {/* Remitente, asunto y vista previa */}
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
+                      <Typography variant="body1" noWrap sx={{ fontWeight: isUnread ? 700 : 500, color: isUnread ? '#FFFFFF' : '#B8C1D1', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 200 }}>
+                        {senderName}
+                      </Typography>
+
+                      {isUnread && (
+                        <Box sx={{ px: 1, py: 0.2, borderRadius: '4px', bgcolor: 'rgba(59,130,246,0.15)', color: '#3B82F6', fontSize: '10px', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                          NUEVO
+                        </Box>
+                      )}
+
+                      {email.attachments.length > 0 && (
+                        <AttachIcon sx={{ fontSize: '16px', color: '#6F7A8A' }} />
+                      )}
+                    </Box>
+
+                    <Typography variant="body1" noWrap sx={{ fontWeight: isUnread ? 600 : 400, color: '#FFFFFF', mb: 0.5, textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                      {email.subject || '(Sin asunto)'}
+                    </Typography>
+
+                    <Typography variant="body2" noWrap sx={{ color: '#6F7A8A', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>
+                      {previewText}
+                    </Typography>
+                  </Box>
+
+                  {/* Fecha y acciones rápidas */}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, minWidth: 100, alignSelf: 'stretch', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" sx={{ color: isUnread ? '#3B82F6' : '#6F7A8A', fontWeight: isUnread ? 700 : 500 }}>
+                      {email.receivedAt.toLocaleDateString('es-PE', { month: 'short', day: 'numeric' })}
+                    </Typography>
+
+                    {/* Acciones rápidas al hacer hover */}
+                    <Box
+                      className="quick-actions"
+                      onClick={(e) => e.stopPropagation()}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        opacity: { xs: 1, md: 0 },
+                        transition: 'opacity 150ms ease-in-out',
+                        bgcolor: 'background.paper',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255,255,255,0.05)',
+                        p: 0.2
+                      }}
+                    >
                       {tabValue === 3 ? (
                         <>
                           <Tooltip title="Restaurar">
-                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} aria-label="Restaurar">
-                              <RestoreFromTrash color="primary" />
+                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} sx={{ color: '#3B82F6' }} aria-label="Restaurar correo">
+                              <RestoreFromTrash fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Eliminar definitivamente">
-                            <IconButton size="small" onClick={(e) => handleDeleteForeverSingle(e, email)} aria-label="Eliminar definitivamente">
-                              <DeleteForever color="error" />
+                            <IconButton size="small" onClick={(e) => handleDeleteForeverSingle(e, email)} sx={{ color: '#EF4444' }} aria-label="Eliminar definitivamente">
+                              <DeleteForever fontSize="small" />
                             </IconButton>
                           </Tooltip>
                         </>
                       ) : (
                         <>
                           <Tooltip title={email.archived ? "Mover a Recibidos" : "Archivar"}>
-                            <IconButton size="small" onClick={(e) => handleToggleArchive(e, email)} aria-label="Archivar">
-                              <Archive color={email.archived ? 'primary' : 'action'} />
+                            <IconButton size="small" onClick={(e) => handleToggleArchive(e, email)} sx={{ color: '#B8C1D1' }} aria-label="Archivar correo">
+                              <Archive fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Eliminar">
-                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} aria-label="Eliminar">
-                              <Delete color="error" />
+                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} sx={{ color: '#EF4444' }} aria-label="Eliminar correo">
+                              <Delete fontSize="small" />
                             </IconButton>
                           </Tooltip>
                         </>
                       )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
+      </Box>
     </Box>
   );
 };
