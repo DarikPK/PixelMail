@@ -35,12 +35,16 @@ import {
   Folder as FolderIcon,
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  KeyboardArrowDown as ArrowDownIcon,
+  KeyboardArrowRight as ArrowRightIcon
 } from '@mui/icons-material';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCustomTheme } from '../contexts/ThemeContext';
+import { useEmails } from '../contexts/EmailContext';
+import { Collapse } from '@mui/material';
 
 const drawerWidth = 220;
 
@@ -49,10 +53,24 @@ const Layout = () => {
   const [anchorEl, setAnchorOpen] = useState<null | HTMLElement>(null);
   const { user, logout } = useAuth();
   const { mode, toggleTheme } = useCustomTheme();
+  const { emails, folders, counts, activeNav, activeFolderId, setActiveNav, setActiveFolderId } = useEmails();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Estado para carpetas colapsadas/expandidas en la barra lateral
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>(() => {
+    return { trabajo: false, personal: false, importante: false };
+  });
+
+  const toggleFolderExpand = (folderId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Evitar navegación si solo se hace clic en la flecha de expandir
+    setExpandedFolders(prev => ({
+      ...prev,
+      [folderId]: !prev[folderId]
+    }));
+  };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -66,21 +84,46 @@ const Layout = () => {
     setAnchorOpen(null);
   };
 
-  // Secciones principales del menú lateral
-  const menuItems = [
-    { text: 'Bandeja de Entrada', icon: <InboxIcon />, path: '/recibidos' },
-    { text: 'Destacados', icon: <StarIcon />, path: '/recibidos?tab=1' },
-    { text: 'Enviados', icon: <SendIcon />, path: '/enviados' },
-    { text: 'Archivados', icon: <ArchiveIcon />, path: '/recibidos?tab=2' },
-    { text: 'Eliminados', icon: <DeleteIcon />, path: '/recibidos?tab=3' },
-    { text: 'Configuración', icon: <SettingsIcon />, path: '/configuracion' },
-  ];
+  // Sincronizar la navegación URL con el estado global de EmailContext
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    const folder = params.get('folder');
 
-  // Carpetas preparadas para futuras funcionalidades
-  const folderItems = [
-    { text: 'Trabajo', color: '#3B82F6' },
-    { text: 'Personal', color: '#22C55E' },
-    { text: 'Importante', color: '#FACC15' },
+    if (location.pathname === '/recibidos') {
+      if (folder) {
+        setActiveNav('folder');
+        setActiveFolderId(folder);
+      } else if (tab === '1') {
+        setActiveNav('destacados');
+        setActiveFolderId(null);
+      } else if (tab === '2') {
+        setActiveNav('archivados');
+        setActiveFolderId(null);
+      } else if (tab === '3') {
+        setActiveNav('eliminados');
+        setActiveFolderId(null);
+      } else {
+        setActiveNav('recibidos');
+        setActiveFolderId(null);
+      }
+    } else if (location.pathname === '/enviados') {
+      setActiveNav('enviados');
+      setActiveFolderId(null);
+    } else if (location.pathname === '/configuracion') {
+      setActiveNav('configuracion');
+      setActiveFolderId(null);
+    }
+  }, [location.pathname, location.search, setActiveNav, setActiveFolderId]);
+
+  // Secciones principales del menú lateral con contadores independientes
+  const menuItems = [
+    { text: `Bandeja de Entrada (${counts.inbox})`, icon: <InboxIcon />, path: '/recibidos', key: 'recibidos' },
+    { text: `Destacados (${counts.starred})`, icon: <StarIcon />, path: '/recibidos?tab=1', key: 'destacados' },
+    { text: `Enviados (${counts.sent})`, icon: <SendIcon />, path: '/enviados', key: 'enviados' },
+    { text: `Archivados (${counts.archived})`, icon: <ArchiveIcon />, path: '/recibidos?tab=2', key: 'archivados' },
+    { text: `Eliminados (${counts.deleted})`, icon: <DeleteIcon />, path: '/recibidos?tab=3', key: 'eliminados' },
+    { text: 'Configuración', icon: <SettingsIcon />, path: '/configuracion', key: 'configuracion' },
   ];
 
   const userInitial = user?.email ? user.email.charAt(0).toUpperCase() : 'U';
@@ -139,11 +182,11 @@ const Layout = () => {
       <Divider sx={{ borderColor: mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.10)', my: 0.5 }} />
 
       {/* Opciones del menú compactas */}
-      <List sx={{ flexGrow: 1, py: 0.2, '& .MuiListItem-root': { py: 0 } }}>
+      <List sx={{ flexGrow: 1, py: 0.1, overflowY: 'auto', '& .MuiListItem-root': { py: 0 } }}>
         {menuItems.map((item) => {
-          const isSelected = location.pathname + location.search === item.path;
+          const isSelected = activeNav === item.key;
           return (
-            <ListItem key={item.text} disablePadding sx={{ mb: 0.1 }}>
+            <ListItem key={item.key} disablePadding sx={{ mb: 0.1 }}>
               <ListItemButton
                 selected={isSelected}
                 onClick={() => {
@@ -151,11 +194,11 @@ const Layout = () => {
                   if (isMobile) setMobileOpen(false);
                 }}
                 sx={{
-                  py: 0.5,
+                  py: 0.4,
                   px: 1.0,
-                  height: '34px',
+                  height: '32px',
                   borderRadius: '6px',
-                  transition: 'all 150ms ease-in-out',
+                  transition: 'all 120ms ease-in-out',
                   position: 'relative',
                   color: isSelected ? (mode === 'dark' ? '#FFFFFF' : '#3B82F6') : (mode === 'dark' ? '#B8C1D1' : '#64748B'),
                   bgcolor: isSelected ? (mode === 'dark' ? 'rgba(59, 130, 246, 0.15) !important' : 'rgba(59, 130, 246, 0.08) !important') : 'transparent',
@@ -169,13 +212,13 @@ const Layout = () => {
                 {isSelected && (
                   <Box sx={{ position: 'absolute', left: 0, top: '25%', bottom: '25%', width: 2.5, bgcolor: '#3B82F6', borderRadius: '0 2px 2px 0' }} />
                 )}
-                <ListItemIcon sx={{ minWidth: 26, color: isSelected ? '#3B82F6' : 'inherit', '& svg': { fontSize: '18px' } }}>
+                <ListItemIcon sx={{ minWidth: 24, color: isSelected ? '#3B82F6' : 'inherit', '& svg': { fontSize: '16px' } }}>
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText
                   primary={item.text}
                   slotProps={{
-                    primary: { fontSize: '12.5px', fontWeight: isSelected ? 600 : 500 } as any
+                    primary: { fontSize: '12px', fontWeight: isSelected ? 600 : 500 } as any
                   }}
                 />
               </ListItemButton>
@@ -183,36 +226,118 @@ const Layout = () => {
           );
         })}
 
-        {/* Sección "Carpetas" preparada */}
-        <Typography variant="caption" sx={{ display: 'block', px: 1.0, pt: 1.0, pb: 0.2, textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'bold', color: '#6F7A8A', fontSize: '10px' }}>
+        {/* Sección "Carpetas" con explorador interactivo */}
+        <Typography variant="caption" sx={{ display: 'block', px: 1.0, pt: 1.0, pb: 0.2, textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'bold', color: '#6F7A8A', fontSize: '9.5px' }}>
           Carpetas
         </Typography>
-        {folderItems.map((folder) => (
-          <ListItem key={folder.text} disablePadding sx={{ mb: 0.1 }}>
-            <ListItemButton
-              disabled
-              sx={{
-                py: 0.4,
-                px: 1.0,
-                height: '30px',
-                borderRadius: '6px',
-                color: '#6F7A8A',
-                opacity: 0.7,
-                '&:hover': { bgcolor: 'transparent' }
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: 26, color: folder.color, '& svg': { fontSize: '16px' } }}>
-                <FolderIcon />
-              </ListItemIcon>
-              <ListItemText
-                primary={folder.text}
-                slotProps={{
-                  primary: { fontSize: '12px', fontWeight: 500 } as any
+        {folders.map((folder) => {
+          const isSelected = activeNav === 'folder' && activeFolderId === folder.id;
+          const isExpanded = !!expandedFolders[folder.id];
+          const folderEmails = emails.filter((e) => e.folderId === folder.id);
+          const folderCount = counts.folders[folder.id] || 0;
+
+          return (
+            <Box key={folder.id} sx={{ mb: 0.1 }}>
+              <ListItemButton
+                selected={isSelected}
+                onClick={() => {
+                  navigate(`/recibidos?folder=${folder.id}`);
+                  if (isMobile) setMobileOpen(false);
                 }}
-              />
-            </ListItemButton>
-          </ListItem>
-        ))}
+                sx={{
+                  py: 0.4,
+                  px: 1.0,
+                  height: '32px',
+                  borderRadius: '6px',
+                  color: isSelected ? (mode === 'dark' ? '#FFFFFF' : '#3B82F6') : (mode === 'dark' ? '#B8C1D1' : '#64748B'),
+                  bgcolor: isSelected ? (mode === 'dark' ? 'rgba(59, 130, 246, 0.15) !important' : 'rgba(59, 130, 246, 0.08) !important') : 'transparent',
+                  '&:hover': {
+                    bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.03)',
+                  }
+                }}
+              >
+                {/* Botón de expandir/colapsar */}
+                <IconButton
+                  size="small"
+                  onClick={(e) => toggleFolderExpand(folder.id, e)}
+                  sx={{ p: 0.1, mr: 0.5, color: 'text.secondary' }}
+                >
+                  {isExpanded ? <ArrowDownIcon sx={{ fontSize: '15px' }} /> : <ArrowRightIcon sx={{ fontSize: '15px' }} />}
+                </IconButton>
+
+                <ListItemIcon sx={{ minWidth: 20, color: folder.color, '& svg': { fontSize: '15px' } }}>
+                  <FolderIcon />
+                </ListItemIcon>
+
+                <ListItemText
+                  primary={`${folder.name} (${folderCount})`}
+                  slotProps={{
+                    primary: { fontSize: '12px', fontWeight: isSelected ? 600 : 500 } as any
+                  }}
+                />
+              </ListItemButton>
+
+              {/* Vista previa miniatura de los correos contenidos (Mini Outlook) */}
+              <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding sx={{ pl: 2, mt: 0.5, mb: 0.5, display: 'flex', flexDirection: 'column', gap: 0.4 }}>
+                  {folderEmails.length === 0 ? (
+                    <Typography variant="caption" sx={{ pl: 1, py: 0.2, color: 'text.disabled', fontStyle: 'italic', fontSize: '10px' }}>
+                      Vacía
+                    </Typography>
+                  ) : (
+                    folderEmails.slice(0, 3).map((email) => {
+                      const senderName = email.fromName || email.fromEmail.split('@')[0] || email.from;
+                      const initial = senderName.charAt(0).toUpperCase();
+                      const isUnread = !email.read;
+
+                      return (
+                        <Box
+                          key={email.id}
+                          onClick={() => {
+                            navigate(`/recibidos?folder=${folder.id}&open=${email.id}`);
+                            if (isMobile) setMobileOpen(false);
+                          }}
+                          sx={{
+                            p: 0.5,
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            bgcolor: isUnread ? (mode === 'dark' ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.05)') : 'transparent',
+                            border: `1px solid ${isUnread ? 'rgba(59,130,246,0.2)' : 'transparent'}`,
+                            transition: 'all 100ms',
+                            display: 'flex',
+                            gap: 0.6,
+                            alignItems: 'center',
+                            minWidth: 0,
+                            '&:hover': {
+                              bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)'
+                            }
+                          }}
+                        >
+                          <Avatar sx={{ bgcolor: folder.color, width: 16, height: 16, fontSize: '8px', fontWeight: 'bold', color: '#FFF' }}>
+                            {initial}
+                          </Avatar>
+                          <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                            <Typography variant="caption" noWrap sx={{ fontWeight: isUnread ? 700 : 500, fontSize: '10px', color: 'text.primary', display: 'block', lineHeight: 1.1 }}>
+                              {senderName}
+                            </Typography>
+                            <Typography variant="caption" noWrap sx={{ fontSize: '9px', color: 'text.secondary', display: 'block', lineHeight: 1.1 }}>
+                              {email.subject || '(Sin asunto)'}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      );
+                    })
+                  )}
+                  {folderEmails.length > 3 && (
+                    <Typography variant="caption" sx={{ pl: 1, color: '#3B82F6', fontWeight: 600, fontSize: '9px' }}>
+                      + {folderEmails.length - 3} más...
+                    </Typography>
+                  )}
+                </List>
+              </Collapse>
+            </Box>
+          );
+        })}
       </List>
 
       <Divider sx={{ borderColor: mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.10)', my: 0.5 }} />

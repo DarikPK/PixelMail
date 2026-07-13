@@ -34,7 +34,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
 import EmailViewer from '../components/EmailViewer';
 
@@ -74,144 +74,29 @@ const getAvatarColor = (name: string) => {
   return avatarColors[index];
 };
 
+import { useEmails } from '../contexts/EmailContext';
+
 const Recibidos = () => {
   const { user, loading: authLoading } = useAuth();
-  const [emails, setEmails] = useState<EmailData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [tabValue, setTabValue] = useState(0); // 0: Recibidos, 1: Destacados, 2: Archivados, 3: Eliminados
+  const { emails, folders, loading, activeNav, activeFolderId } = useEmails();
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [emptying, setEmptying] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get('tab');
+  const folderParam = searchParams.get('folder');
+  const openParam = searchParams.get('open');
 
   // Menú de "Más opciones" en barra de acciones
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
 
+  // Sincronizar apertura de correos desde la barra lateral (mini preview)
   useEffect(() => {
-    if (tabParam !== null) {
-      setTabValue(parseInt(tabParam, 10));
+    if (openParam) {
+      setSelectedEmailId(openParam);
     } else {
-      setTabValue(0);
+      setSelectedEmailId(null);
     }
-  }, [tabParam]);
-
-  useEffect(() => {
-    // 2. Esperar a que Firebase Authentication termine de cargar
-    if (authLoading) {
-      console.log("[PIXEL MAIL INBOX] Esperando a que cargue la autenticación...");
-      return;
-    }
-
-    if (!user) {
-      console.log("[PIXEL MAIL INBOX] No hay usuario autenticado.");
-      return;
-    }
-
-    // 4. Configurar la consulta con filtros dinámicos compatibles
-    let q;
-    const emailsRef = collection(db, 'emails');
-
-    if (tabValue === 0) {
-      // Recibidos: no archivados, no eliminados
-      q = query(
-        emailsRef,
-        where('userId', '==', user.uid),
-        where('direction', '==', 'inbound'),
-        where('deleted', '==', false),
-        where('archived', '==', false),
-        orderBy('receivedAt', 'desc')
-      );
-    } else if (tabValue === 1) {
-      // Destacados: starred, no eliminados
-      q = query(
-        emailsRef,
-        where('userId', '==', user.uid),
-        where('direction', '==', 'inbound'),
-        where('deleted', '==', false),
-        where('starred', '==', true),
-        orderBy('receivedAt', 'desc')
-      );
-    } else if (tabValue === 2) {
-      // Archivados: archived, no eliminados
-      q = query(
-        emailsRef,
-        where('userId', '==', user.uid),
-        where('direction', '==', 'inbound'),
-        where('deleted', '==', false),
-        where('archived', '==', true),
-        orderBy('receivedAt', 'desc')
-      );
-    } else {
-      // Eliminados: deleted
-      q = query(
-        emailsRef,
-        where('userId', '==', user.uid),
-        where('direction', '==', 'inbound'),
-        where('deleted', '==', true),
-        orderBy('receivedAt', 'desc')
-      );
-    }
-
-    console.log("[PIXEL MAIL INBOX] Iniciando suscripción con parámetros:", {
-      uid: user.uid,
-      authLoading,
-      collectionName: "emails",
-      tabValue,
-      filters: {
-        userId: user.uid,
-        direction: "inbound",
-        deleted: tabValue === 3 ? true : false,
-        archived: tabValue === 2 ? true : (tabValue === 0 ? false : undefined),
-        starred: tabValue === 1 ? true : undefined
-      }
-    });
-
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const emailsData: EmailData[] = [];
-      console.log(`[PIXEL MAIL INBOX] Documentos recibidos del servidor: ${querySnapshot.size}`);
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        console.log(`[PIXEL MAIL INBOX] Doc ID: ${doc.id}, userId de documento: ${data.userId}`);
-
-        emailsData.push({
-          id: doc.id,
-          resendEmailId: data.resendEmailId || doc.id,
-          from: data.from || '',
-          fromName: data.fromName || '',
-          fromEmail: data.fromEmail || '',
-          to: data.to || [],
-          cc: data.cc || [],
-          bcc: data.bcc || [],
-          subject: data.subject || '',
-          text: data.text || '',
-          html: data.html || '',
-          attachments: data.attachments || [],
-          receivedAt: data.receivedAt?.toDate() || new Date(),
-          direction: data.direction || 'inbound',
-          status: data.status || 'received',
-          read: data.read ?? false,
-          starred: data.starred ?? false,
-          archived: data.archived ?? false,
-          deleted: data.deleted ?? false,
-        });
-      });
-
-      setEmails(emailsData);
-      setLoading(false);
-      console.log('[PIXEL MAIL INBOX] emails loaded successfully');
-    }, (error) => {
-      console.error("[PIXEL MAIL INBOX] Errores completos de Firestore:", {
-        code: error.code,
-        message: error.message,
-        stack: error.stack
-      });
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [user, authLoading, tabValue]);
+  }, [openParam]);
 
   const handleToggleStar = async (e: React.MouseEvent, email: EmailData) => {
     e.stopPropagation();
@@ -342,8 +227,14 @@ const Recibidos = () => {
   };
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-    setSearchParams({ tab: newValue.toString() });
+    if (newValue === 0) {
+      setSearchParams({});
+    } else {
+      const folder = folders[newValue - 1];
+      if (folder) {
+        setSearchParams({ folder: folder.id });
+      }
+    }
   };
 
   if (authLoading) {
@@ -354,13 +245,38 @@ const Recibidos = () => {
     );
   }
 
+  // Filtrado de correos según la navegación activa
+  const filteredEmails = emails.filter((email) => {
+    if (email.direction !== 'inbound') return false;
+
+    if (activeNav === 'recibidos') {
+      return !email.deleted && !email.archived && !email.folderId;
+    } else if (activeNav === 'destacados') {
+      return !email.deleted && email.starred;
+    } else if (activeNav === 'archivados') {
+      return !email.deleted && email.archived;
+    } else if (activeNav === 'eliminados') {
+      return email.deleted;
+    } else if (activeNav === 'folder') {
+      return !email.deleted && email.folderId === activeFolderId;
+    }
+    return false;
+  });
+
   // Si hay un correo seleccionado, mostramos la vista completa del correo en lugar del listado
   const emailToShow = emails.find((e) => e.id === selectedEmailId);
   if (selectedEmailId && emailToShow) {
     return (
       <EmailViewer
         email={emailToShow}
-        onBack={() => setSelectedEmailId(null)}
+        onBack={() => {
+          // Si abrimos desde un folder, conservar los query params
+          if (folderParam) {
+            setSearchParams({ folder: folderParam });
+          } else {
+            setSearchParams({});
+          }
+        }}
         onToggleRead={async () => {
           try {
             await updateDoc(doc(db, 'emails', emailToShow.id), {
@@ -416,23 +332,36 @@ const Recibidos = () => {
     );
   }
 
-  const tabLabels = [
-    { label: "RECIBIDOS", count: emails.length },
-    { label: "DESTACADOS", count: emails.length },
-    { label: "ARCHIVADOS", count: emails.length },
-    { label: "ELIMINADOS", count: emails.length }
+  // Las pestañas superiores muestran "Recibidos" + las carpetas del usuario
+  const tabHeaders = [
+    { label: 'RECIBIDOS', id: 'recibidos', type: 'recibidos', color: '#3B82F6' },
+    ...folders.map(f => ({ label: f.name.toUpperCase(), id: f.id, type: 'folder', color: f.color }))
   ];
+
+  const currentTabValue = activeNav === 'folder'
+    ? folders.findIndex(f => f.id === activeFolderId) + 1
+    : (activeNav === 'recibidos' ? 0 : false);
+
+  // Obtener el título dinámico según la navegación
+  let dynamicTitle = 'Bandeja de Entrada';
+  if (activeNav === 'destacados') dynamicTitle = 'Destacados';
+  else if (activeNav === 'archivados') dynamicTitle = 'Archivados';
+  else if (activeNav === 'eliminados') dynamicTitle = 'Papelera de Reciclaje';
+  else if (activeNav === 'folder') {
+    const f = folders.find(folder => folder.id === activeFolderId);
+    dynamicTitle = f ? f.name : 'Carpeta';
+  }
 
   return (
     <Box sx={{ animation: 'fadeIn 200ms ease-in-out' }}>
       {/* Título de la sección compactado a 26px en escritorio */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.0, mb: 1.5 }}>
         <Typography variant="h3" sx={{ fontWeight: 700, color: 'text.primary', letterSpacing: '-0.5px', fontSize: { xs: '22px', md: '26px' }, lineHeight: 1.2 }}>
-          Bandeja de Entrada
+          {dynamicTitle}
         </Typography>
 
         {/* Botón Vaciar Papelera con diseño Premium */}
-        {tabValue === 3 && emails.length > 0 && (
+        {activeNav === 'eliminados' && filteredEmails.length > 0 && (
           <Button
             variant="contained"
             color="error"
@@ -453,15 +382,15 @@ const Recibidos = () => {
             }}
             aria-label="Vaciar papelera"
           >
-            {emptying ? "Vaciando..." : `Vaciar papelera (${emails.length})`}
+            {emptying ? "Vaciando..." : `Vaciar papelera (${filteredEmails.length})`}
           </Button>
         )}
       </Box>
 
-      {/* Pestañas de la Bandeja */}
+      {/* Pestañas de la Bandeja (Recibidos + Carpetas) */}
       <Box sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
         <Tabs
-          value={tabValue}
+          value={currentTabValue}
           onChange={handleTabChange}
           sx={{
             minHeight: '34px',
@@ -472,21 +401,19 @@ const Recibidos = () => {
             }
           }}
         >
-          {tabLabels.map((tab, idx) => {
-            const isActive = tabValue === idx;
+          {tabHeaders.map((tab, idx) => {
+            const isActive = currentTabValue === idx;
             return (
               <Tab
-                key={tab.label}
+                key={tab.id}
                 label={
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                    {tab.type === 'folder' && (
+                      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: tab.color }} />
+                    )}
                     <Typography variant="body2" sx={{ fontWeight: 600, letterSpacing: '0.2px', fontSize: '11.5px' }}>
                       {tab.label}
                     </Typography>
-                    {tab.count > 0 && (
-                      <Box sx={{ display: 'inline-flex', px: 0.6, py: 0.1, borderRadius: '6px', bgcolor: isActive ? 'rgba(59,130,246,0.12)' : 'rgba(15,23,42,0.04)', color: isActive ? '#3B82F6' : 'text.secondary', fontSize: '9px', fontWeight: 'bold' }}>
-                        {tab.count}
-                      </Box>
-                    )}
                   </Box>
                 }
                 sx={{
@@ -510,7 +437,7 @@ const Recibidos = () => {
           <Checkbox size="small" disabled sx={{ color: 'text.disabled', p: 0.2 }} />
           <Divider orientation="vertical" flexItem sx={{ borderColor: 'divider', mx: 0.2 }} />
           <Tooltip title="Actualizar">
-            <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} onClick={() => setLoading(true)}>
+            <IconButton size="small" sx={{ color: 'text.secondary', p: 0.4 }} onClick={() => window.location.reload()}>
               <Refresh sx={{ fontSize: '16px' }} />
             </IconButton>
           </Tooltip>
@@ -552,7 +479,7 @@ const Recibidos = () => {
           </Tooltip>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
             <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 600, fontSize: '10.5px' }}>
-              1-{emails.length} de {emails.length}
+              1-{filteredEmails.length} de {filteredEmails.length}
             </Typography>
             <IconButton size="small" sx={{ color: 'text.disabled', p: 0.3 }} disabled>
               <ChevronLeft sx={{ fontSize: '16px' }} />
@@ -570,14 +497,14 @@ const Recibidos = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress size={26} />
           </Box>
-        ) : emails.length === 0 ? (
+        ) : filteredEmails.length === 0 ? (
           <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'rgba(15,23,42,0.01)', border: '1px dashed divider' }}>
             <Typography variant="body2" color="text.secondary">
               No hay correos en esta sección.
             </Typography>
           </Paper>
         ) : (
-          emails.map((email) => {
+          filteredEmails.map((email) => {
             const isUnread = !email.read;
             const senderName = email.fromName || email.fromEmail.split('@')[0] || email.from;
             const initial = senderName.charAt(0).toUpperCase();
@@ -681,7 +608,7 @@ const Recibidos = () => {
                         p: 0.1
                       }}
                     >
-                      {tabValue === 3 ? (
+                      {activeNav === 'eliminados' ? (
                         <>
                           <Tooltip title="Restaurar">
                             <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} sx={{ color: '#3B82F6', p: 0.2 }} aria-label="Restaurar correo">
