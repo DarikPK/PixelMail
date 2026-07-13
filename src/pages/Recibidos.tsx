@@ -58,7 +58,7 @@ interface EmailData {
 }
 
 const Recibidos = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [emails, setEmails] = useState<EmailData[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0); // 0: Recibidos, 1: Destacados, 2: Archivados, 3: Eliminados
@@ -66,20 +66,84 @@ const Recibidos = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    // 2. Esperar a que Firebase Authentication termine de cargar
+    if (authLoading) {
+      console.log("[PIXEL MAIL INBOX] Esperando a que cargue la autenticación...");
+      return;
+    }
 
-    // Filtros por pestaña
-    let q = query(
-      collection(db, 'emails'),
-      where('userId', '==', user.uid),
-      where('direction', '==', 'inbound'),
-      orderBy('receivedAt', 'desc')
-    );
+    if (!user) {
+      console.log("[PIXEL MAIL INBOX] No hay usuario autenticado.");
+      return;
+    }
+
+    // 4. Configurar la consulta con filtros dinámicos compatibles
+    let q;
+    const emailsRef = collection(db, 'emails');
+
+    if (tabValue === 0) {
+      // Recibidos: no archivados, no eliminados
+      q = query(
+        emailsRef,
+        where('userId', '==', user.uid),
+        where('direction', '==', 'inbound'),
+        where('deleted', '==', false),
+        where('archived', '==', false),
+        orderBy('receivedAt', 'desc')
+      );
+    } else if (tabValue === 1) {
+      // Destacados: starred, no eliminados
+      q = query(
+        emailsRef,
+        where('userId', '==', user.uid),
+        where('direction', '==', 'inbound'),
+        where('deleted', '==', false),
+        where('starred', '==', true),
+        orderBy('receivedAt', 'desc')
+      );
+    } else if (tabValue === 2) {
+      // Archivados: archived, no eliminados
+      q = query(
+        emailsRef,
+        where('userId', '==', user.uid),
+        where('direction', '==', 'inbound'),
+        where('deleted', '==', false),
+        where('archived', '==', true),
+        orderBy('receivedAt', 'desc')
+      );
+    } else {
+      // Eliminados: deleted
+      q = query(
+        emailsRef,
+        where('userId', '==', user.uid),
+        where('direction', '==', 'inbound'),
+        where('deleted', '==', true),
+        orderBy('receivedAt', 'desc')
+      );
+    }
+
+    console.log("[PIXEL MAIL INBOX] Iniciando suscripción con parámetros:", {
+      uid: user.uid,
+      authLoading,
+      collectionName: "emails",
+      tabValue,
+      filters: {
+        userId: user.uid,
+        direction: "inbound",
+        deleted: tabValue === 3 ? true : false,
+        archived: tabValue === 2 ? true : (tabValue === 0 ? false : undefined),
+        starred: tabValue === 1 ? true : undefined
+      }
+    });
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const emailsData: EmailData[] = [];
+      console.log(`[PIXEL MAIL INBOX] Documentos recibidos del servidor: ${querySnapshot.size}`);
+
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        console.log(`[PIXEL MAIL INBOX] Doc ID: ${doc.id}, userId de documento: ${data.userId}`);
+
         emailsData.push({
           id: doc.id,
           resendEmailId: data.resendEmailId || doc.id,
@@ -102,30 +166,21 @@ const Recibidos = () => {
           deleted: data.deleted ?? false,
         });
       });
+
       setEmails(emailsData);
       setLoading(false);
       console.log('[PIXEL MAIL INBOX] emails loaded successfully');
     }, (error) => {
-      console.error("[PIXEL MAIL INBOX] Error fetching emails:", error);
+      console.error("[PIXEL MAIL INBOX] Errores completos de Firestore:", {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [user]);
-
-  // Filtrar los correos en memoria según la pestaña seleccionada
-  const filteredEmails = emails.filter((email) => {
-    if (tabValue === 0) {
-      return !email.archived && !email.deleted;
-    } else if (tabValue === 1) {
-      return email.starred && !email.deleted;
-    } else if (tabValue === 2) {
-      return email.archived && !email.deleted;
-    } else if (tabValue === 3) {
-      return email.deleted;
-    }
-    return true;
-  });
+  }, [user, authLoading, tabValue]);
 
   const handleToggleStar = async (e: React.MouseEvent, email: EmailData) => {
     e.stopPropagation();
@@ -223,6 +278,14 @@ const Recibidos = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  if (authLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
     <Box>
       <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
@@ -257,7 +320,7 @@ const Recibidos = () => {
                   <CircularProgress size={24} />
                 </TableCell>
               </TableRow>
-            ) : filteredEmails.length === 0 ? (
+            ) : emails.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
                   <Typography variant="body1" color="text.secondary">
@@ -266,7 +329,7 @@ const Recibidos = () => {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredEmails.map((email) => {
+              emails.map((email) => {
                 const isUnread = !email.read;
                 return (
                   <TableRow
