@@ -280,13 +280,22 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
   }
 
   // 6. Procesar Payload
-  const event = req.body || {};
-  const eventType = event.type;
+  const verifiedEvent = req.body || {};
+  const eventType = verifiedEvent.type;
 
   if (!eventType) {
     logger.error("[RESEND WEBHOOK] Missing event type in payload");
     return res.status(400).json({ error: "Bad Request - Missing event type" });
   }
+
+  // Logs temporales seguros de diagnóstico
+  logger.log("[RESEND WEBHOOK] Diagnóstico de evento verificado", {
+    typeofVerifiedEvent: typeof verifiedEvent,
+    keys: Object.keys(verifiedEvent),
+    type: verifiedEvent.type,
+    dataKeys: Object.keys(verifiedEvent.data || {}),
+    hasEmailId: Boolean(verifiedEvent.data?.email_id)
+  });
 
   // Procesar únicamente eventos email.received. Responder 200 a otros eventos para evitar reintentos.
   if (eventType !== "email.received") {
@@ -294,7 +303,12 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
     return res.status(200).json({ success: true, ignored: true, message: `Event ${eventType} ignored` });
   }
 
-  const emailId = event.data?.id;
+  const emailId =
+    verifiedEvent?.data?.email_id ||
+    verifiedEvent?.email_id ||
+    verifiedEvent?.data?.data?.email_id ||
+    verifiedEvent?.data?.id;
+
   if (!emailId) {
     logger.error("[RESEND WEBHOOK] Missing email id in event data");
     return res.status(400).json({ error: "Bad Request - Missing email id" });
