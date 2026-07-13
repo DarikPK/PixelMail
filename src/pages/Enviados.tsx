@@ -25,7 +25,7 @@ import { useEmails } from '../contexts/EmailContext';
 
 interface EmailData {
   id: string;
-  to: string;
+  to: any;
   subject: string;
   body: string;
   status: string;
@@ -226,7 +226,15 @@ const Enviados = () => {
           </Paper>
         ) : (
           emails.map((email) => {
-            const recipientName = email.to.split('@')[0] || email.to;
+            // Obtener el primer destinatario de forma segura (soporta array, string o undefined)
+            const recipient = Array.isArray(email.to)
+              ? (email.to[0] || '')
+              : (typeof email.to === 'string' ? email.to : '');
+
+            const recipientName = recipient
+              ? (recipient.split('@')[0] || recipient)
+              : 'Destinatario';
+
             const initial = recipientName.charAt(0).toUpperCase();
             const avatarBg = getAvatarColor(recipientName);
 

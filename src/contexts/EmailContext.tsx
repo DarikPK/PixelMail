@@ -522,12 +522,7 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
     const batch = writeBatch(db);
     selectedEmailIds.forEach((id) => {
       const email = emails.find(e => e.id === id);
-
-      let prev = email?.previousFolder;
-      if (!prev) {
-        const isSent = email ? email.direction !== 'inbound' : false;
-        prev = isSent ? 'sent' : 'inbox';
-      }
+      const prev = email?.previousFolder || 'inbox';
 
       const docRef = doc(db, 'emails', id);
       if (prev === 'sent') {
@@ -543,23 +538,12 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
           previousFolder: null
         });
       } else if (prev !== 'inbox' && prev !== 'sent') {
-        // Verificar si la carpeta personalizada aún existe, si no, restaurar a Recibidos
-        const folderExists = folders.some(f => f.id === prev);
-        if (folderExists) {
-          batch.update(docRef, {
-            deleted: false,
-            archived: false,
-            folderId: prev,
-            previousFolder: null
-          });
-        } else {
-          batch.update(docRef, {
-            deleted: false,
-            archived: false,
-            folderId: null,
-            previousFolder: null
-          });
-        }
+        batch.update(docRef, {
+          deleted: false,
+          archived: false,
+          folderId: prev,
+          previousFolder: null
+        });
       } else {
         batch.update(docRef, {
           deleted: false,

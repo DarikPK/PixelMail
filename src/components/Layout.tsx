@@ -872,9 +872,14 @@ const Layout = () => {
                   </TableRow>
                 ) : (
                   spaceEaters.map(({ email, size, hasAttachments }) => {
+                    const fromEmail = email.fromEmail || '';
+                    const recipient = Array.isArray(email.to)
+                      ? (email.to[0] || '')
+                      : (typeof email.to === 'string' ? email.to : '');
+
                     const party = email.direction === 'inbound'
-                      ? (email.fromName || email.fromEmail.split('@')[0] || email.from)
-                      : `Para: ${email.to[0]?.split('@')[0] || email.to[0]}`;
+                      ? (email.fromName || (fromEmail ? fromEmail.split('@')[0] : '') || email.from || 'Remitente')
+                      : `Para: ${recipient ? (recipient.split('@')[0] || recipient) : 'Destinatario'}`;
 
                     let origin = 'Inbox';
                     if (email.deleted) origin = 'Papelera';
