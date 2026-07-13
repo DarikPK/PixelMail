@@ -327,12 +327,20 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
     return res.status(500).json({ error: "Database Error" });
   }
 
-  // 8. Consultar contenido completo en Resend
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  // 8. Consultar contenido completo en Resend utilizando la clave de API de recepción
+  const receivingApiKey = process.env.RESEND_RECEIVING_API_KEY;
+  if (!receivingApiKey) {
+    logger.error("[RESEND INBOUND] Missing RESEND_RECEIVING_API_KEY");
+    return res.status(500).json({
+      error: "Receiving API key is not configured"
+    });
+  }
+
+  const receivingResend = new Resend(receivingApiKey);
   let emailContent;
   try {
     logger.log(`[RESEND INBOUND] Fetching complete email content for ${emailId}`);
-    emailContent = await resend.emails.get(emailId);
+    emailContent = await receivingResend.emails.get(emailId);
     if (!emailContent || emailContent.error) {
       throw new Error(emailContent?.error?.message || "Failed to retrieve email content from Resend");
     }
