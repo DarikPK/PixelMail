@@ -339,28 +339,28 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
   const receivingResend = new Resend(receivingApiKey);
   let emailContent;
   try {
-    logger.log(`[RESEND INBOUND] Fetching complete email content for ${emailId}`);
-    emailContent = await receivingResend.emails.get(emailId);
-    if (!emailContent || emailContent.error) {
-      throw new Error(emailContent?.error?.message || "Failed to retrieve email content from Resend");
+    logger.log(`[RESEND INBOUND] Fetching complete received email content for ${emailId}`);
+    const { data, error } = await receivingResend.emails.receiving.get(emailId);
+    if (error) {
+      throw new Error(error.message || "Failed to retrieve received email");
     }
+    emailContent = data;
   } catch (fetchError) {
     logger.error(`[RESEND INBOUND] Error retrieving email ${emailId} from Resend`, fetchError);
     return res.status(500).json({ error: "Temporary error fetching complete email: " + fetchError.message });
   }
 
-  // 9. Mapear parámetros y normalizar
-  const data = emailContent.data || emailContent;
-  const from = data.from || "";
-  const to = data.to || [];
-  const cc = data.cc || [];
-  const bcc = data.bcc || [];
-  const subject = data.subject || "";
-  const html = data.html || "";
-  const text = data.text || "";
-  const headers = data.headers || {};
-  const rawAttachments = data.attachments || [];
-  const createdAtString = data.created_at || new Date().toISOString();
+  // 9. Mapear parámetros y normalizar usando directamente el emailContent devuelto
+  const from = emailContent.from || "";
+  const to = emailContent.to || [];
+  const cc = emailContent.cc || [];
+  const bcc = emailContent.bcc || [];
+  const subject = emailContent.subject || "";
+  const html = emailContent.html || "";
+  const text = emailContent.text || "";
+  const headers = emailContent.headers || {};
+  const rawAttachments = emailContent.attachments || [];
+  const createdAtString = emailContent.created_at || new Date().toISOString();
 
   let fromName = "";
   let fromEmail = from;
