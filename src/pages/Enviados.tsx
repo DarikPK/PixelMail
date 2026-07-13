@@ -99,19 +99,19 @@ const Enviados = () => {
 
   return (
     <Box sx={{ animation: 'fadeIn 200ms ease-in-out' }}>
-      <Typography variant="h3" sx={{ fontWeight: 800, color: '#FFFFFF', letterSpacing: '-1px', mb: 3 }}>
+      <Typography variant="h3" sx={{ fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.8px', fontSize: { xs: '24px', md: '28px' }, mb: 2 }}>
         Correos Enviados
       </Typography>
 
-      {/* Listado de Tarjetas Modernas de Correos Enviados */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 2 }}>
+      {/* Listado de Tarjetas Modernas de Correos Enviados (gap reducido) */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, mt: 1.5 }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress size={36} />
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+            <CircularProgress size={30} />
           </Box>
         ) : emails.length === 0 ? (
-          <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)' }}>
-            <Typography variant="body1" color="text.secondary">
+          <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)' }}>
+            <Typography variant="body2" color="text.secondary">
               No hay correos enviados.
             </Typography>
           </Paper>
@@ -129,58 +129,59 @@ const Enviados = () => {
                 key={email.id}
                 variant="outlined"
                 sx={{
-                  borderRadius: '16px',
+                  borderRadius: '12px',
                   bgcolor: 'rgba(255,255,255,0.02)',
                   borderColor: 'rgba(255,255,255,0.08)',
                   transition: 'all 180ms ease-in-out',
                   '&:hover': {
                     bgcolor: '#242C3D',
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 8px 16px -2px rgba(0,0,0,0.3)',
+                    transform: 'translateY(-1px)',
+                    boxShadow: '0 6px 12px -2px rgba(0,0,0,0.3)',
                     borderColor: 'rgba(255,255,255,0.15)',
                     '& .quick-actions': { opacity: 1 }
                   }
                 }}
               >
-                <CardContent sx={{ p: '16px !important', display: 'flex', alignItems: 'center', gap: 2, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                {/* Padding vertical reducido un 25% (de 16px a 10px) */}
+                <CardContent sx={{ p: '10px 14px !important', display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
                   {/* Icono de envíos */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', px: 1 }}>
-                    <SendIcon sx={{ color: '#3B82F6', fontSize: '20px' }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', px: 0.5 }}>
+                    <SendIcon sx={{ color: '#3B82F6', fontSize: '18px' }} />
                   </Box>
 
-                  {/* Avatar del destinatario */}
-                  <Avatar sx={{ bgcolor: avatarBg, width: 40, height: 40, fontSize: '14px', fontWeight: 'bold' }}>
+                  {/* Avatar del destinatario (reducido a 32px) */}
+                  <Avatar sx={{ bgcolor: avatarBg, width: 32, height: 32, fontSize: '12px', fontWeight: 'bold' }}>
                     {initial}
                   </Avatar>
 
                   {/* Asunto, destinatario y vista previa */}
                   <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
-                      <Typography variant="body1" noWrap sx={{ fontWeight: 600, color: '#FFFFFF', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 200 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flexWrap: 'wrap', mb: 0.2 }}>
+                      <Typography variant="body1" noWrap sx={{ fontWeight: 600, color: '#FFFFFF', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 200, fontSize: '13.5px' }}>
                         Para: {recipientName}
                       </Typography>
 
-                      <Box sx={{ px: 1, py: 0.2, borderRadius: '4px', bgcolor: 'rgba(34,197,94,0.15)', color: '#22C55E', fontSize: '10px', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                      <Box sx={{ px: 0.8, py: 0.1, borderRadius: '4px', bgcolor: 'rgba(34,197,94,0.15)', color: '#22C55E', fontSize: '9px', fontWeight: 'bold', letterSpacing: '0.5px' }}>
                         ENVIADO
                       </Box>
 
                       {email.attachments && email.attachments.length > 0 && (
-                        <AttachIcon sx={{ fontSize: '16px', color: '#6F7A8A' }} />
+                        <AttachIcon sx={{ fontSize: '14px', color: '#6F7A8A' }} />
                       )}
                     </Box>
 
-                    <Typography variant="body1" noWrap sx={{ fontWeight: 500, color: '#B8C1D1', mb: 0.5, textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 500, color: '#B8C1D1', mb: 0.2, textOverflow: 'ellipsis', overflow: 'hidden', fontSize: '13px' }}>
                       {email.subject || '(Sin asunto)'}
                     </Typography>
 
-                    <Typography variant="body2" noWrap sx={{ color: '#6F7A8A', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>
+                    <Typography variant="body2" noWrap sx={{ color: '#6F7A8A', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block', fontSize: '12px' }}>
                       {previewText}
                     </Typography>
                   </Box>
 
                   {/* Fecha y acciones rápidas */}
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, minWidth: 100, alignSelf: 'stretch', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 500 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5, minWidth: 85, alignSelf: 'stretch', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 500, fontSize: '11px' }}>
                       {email.createdAt.toLocaleDateString('es-PE', { month: 'short', day: 'numeric' })}
                     </Typography>
 
@@ -191,18 +192,18 @@ const Enviados = () => {
                       sx={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 0.5,
+                        gap: 0.3,
                         opacity: { xs: 1, md: 0 },
                         transition: 'opacity 150ms ease-in-out',
                         bgcolor: 'background.paper',
-                        borderRadius: '8px',
+                        borderRadius: '6px',
                         border: '1px solid rgba(255,255,255,0.05)',
-                        p: 0.2
+                        p: 0.1
                       }}
                     >
                       <Tooltip title="Eliminar registro">
-                        <IconButton size="small" onClick={(e) => handleDeleteSent(e, email.id)} sx={{ color: '#EF4444' }}>
-                          <Delete fontSize="small" />
+                        <IconButton size="small" onClick={(e) => handleDeleteSent(e, email.id)} sx={{ color: '#EF4444', p: 0.3 }}>
+                          <Delete sx={{ fontSize: '16px' }} />
                         </IconButton>
                       </Tooltip>
                     </Box>

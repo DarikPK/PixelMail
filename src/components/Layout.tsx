@@ -40,7 +40,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-const drawerWidth = 280;
+const drawerWidth = 240;
 
 const Layout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -85,34 +85,34 @@ const Layout = () => {
 
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: '#131722', color: '#FFFFFF', p: 2 }}>
-      {/* Parte superior: Logo Pixel Mail */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 2, px: 1 }}>
-        <Box sx={{ width: 32, height: 32, borderRadius: '8px', bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#FFF', fontSize: '18px' }}>
+      {/* Parte superior: Logo Pixel Mail (reducido ~15%) */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, py: 1.5, px: 1 }}>
+        <Box sx={{ width: 27, height: 27, borderRadius: '6px', bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#FFF', fontSize: '15px' }}>
           P
         </Box>
-        <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: '-0.5px', color: '#FFFFFF' }}>
+        <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: '-0.5px', color: '#FFFFFF', fontSize: '17px' }}>
           PixelMail
         </Typography>
       </Box>
 
-      {/* Botón muy llamativo: Redactar */}
-      <Box sx={{ my: 2 }}>
+      {/* Botón muy llamativo: Redactar (alto reducido un 20%) */}
+      <Box sx={{ my: 1.5 }}>
         <Button
           fullWidth
           variant="contained"
-          startIcon={<AddIcon />}
+          startIcon={<AddIcon sx={{ fontSize: '18px' }} />}
           onClick={() => {
             navigate('/redactar');
             if (isMobile) setMobileOpen(false);
           }}
           sx={{
-            py: 1.5,
-            borderRadius: '16px',
+            py: 1.0,
+            borderRadius: '12px',
             background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
-            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+            boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)',
             fontWeight: 'bold',
             color: '#FFFFFF',
-            fontSize: '16px',
+            fontSize: '14px',
             transition: 'transform 150ms ease-in-out',
             '&:hover': {
               transform: 'scale(1.02)',
@@ -127,11 +127,11 @@ const Layout = () => {
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', my: 1 }} />
 
       {/* Opciones del menú */}
-      <List sx={{ flexGrow: 1, overflowY: 'auto' }}>
+      <List sx={{ flexGrow: 1, overflowY: 'auto', py: 0.5 }}>
         {menuItems.map((item) => {
           const isSelected = location.pathname + location.search === item.path;
           return (
-            <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+            <ListItem key={item.text} disablePadding sx={{ mb: 0.2 }}>
               <ListItemButton
                 selected={isSelected}
                 onClick={() => {
@@ -139,9 +139,9 @@ const Layout = () => {
                   if (isMobile) setMobileOpen(false);
                 }}
                 sx={{
-                  py: 1.2,
-                  px: 2,
-                  borderRadius: '12px',
+                  py: 0.8,
+                  px: 1.5,
+                  borderRadius: '10px',
                   transition: 'all 150ms ease-in-out',
                   position: 'relative',
                   color: isSelected ? '#FFFFFF' : '#B8C1D1',
@@ -154,15 +154,15 @@ const Layout = () => {
               >
                 {/* Indicador lateral azul */}
                 {isSelected && (
-                  <Box sx={{ position: 'absolute', left: 0, top: '25%', bottom: '25%', width: 4, bgcolor: '#3B82F6', borderRadius: '0 4px 4px 0' }} />
+                  <Box sx={{ position: 'absolute', left: 0, top: '25%', bottom: '25%', width: 3, bgcolor: '#3B82F6', borderRadius: '0 4px 4px 0' }} />
                 )}
-                <ListItemIcon sx={{ minWidth: 36, color: isSelected ? '#3B82F6' : 'inherit' }}>
+                <ListItemIcon sx={{ minWidth: 30, color: isSelected ? '#3B82F6' : 'inherit', '& svg': { fontSize: '20px' } }}>
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText
                   primary={item.text}
                   slotProps={{
-                    primary: { fontSize: '15px', fontWeight: isSelected ? 600 : 500 } as any
+                    primary: { fontSize: '13.5px', fontWeight: isSelected ? 600 : 500 } as any
                   }}
                 />
               </ListItemButton>
@@ -171,28 +171,28 @@ const Layout = () => {
         })}
 
         {/* Sección "Carpetas" preparada */}
-        <Typography variant="caption" sx={{ display: 'block', px: 2, pt: 3, pb: 1, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold', color: '#6F7A8A' }}>
+        <Typography variant="caption" sx={{ display: 'block', px: 1.5, pt: 1.5, pb: 0.5, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold', color: '#6F7A8A', fontSize: '11px' }}>
           Carpetas
         </Typography>
         {folderItems.map((folder) => (
-          <ListItem key={folder.text} disablePadding sx={{ mb: 0.5 }}>
+          <ListItem key={folder.text} disablePadding sx={{ mb: 0.2 }}>
             <ListItemButton
               disabled
               sx={{
-                py: 0.8,
-                px: 2,
-                borderRadius: '12px',
+                py: 0.6,
+                px: 1.5,
+                borderRadius: '10px',
                 color: '#6F7A8A',
                 '&:hover': { bgcolor: 'transparent' }
               }}
             >
-              <ListItemIcon sx={{ minWidth: 36, color: folder.color }}>
-                <FolderIcon fontSize="small" />
+              <ListItemIcon sx={{ minWidth: 30, color: folder.color, '& svg': { fontSize: '18px' } }}>
+                <FolderIcon />
               </ListItemIcon>
               <ListItemText
                 primary={folder.text}
                 slotProps={{
-                  primary: { fontSize: '14px', fontWeight: 500 } as any
+                  primary: { fontSize: '13px', fontWeight: 500 } as any
                 }}
               />
             </ListItemButton>
@@ -203,13 +203,13 @@ const Layout = () => {
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', my: 1 }} />
 
       {/* Al final: Almacenamiento, Versión y Toggle visual */}
-      <Box sx={{ p: 1 }}>
-        <Box sx={{ mb: 2 }}>
+      <Box sx={{ p: 0.5, mt: 'auto' }}>
+        <Box sx={{ mb: 1.5 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-            <Typography variant="caption" sx={{ color: '#B8C1D1', fontWeight: 500 }}>
+            <Typography variant="caption" sx={{ color: '#B8C1D1', fontWeight: 500, fontSize: '11px' }}>
               Almacenamiento
             </Typography>
-            <Typography variant="caption" sx={{ color: '#6F7A8A' }}>
+            <Typography variant="caption" sx={{ color: '#6F7A8A', fontSize: '11px' }}>
               2.4 GB de 10 GB
             </Typography>
           </Box>
@@ -217,8 +217,8 @@ const Layout = () => {
             variant="determinate"
             value={24}
             sx={{
-              height: 6,
-              borderRadius: '3px',
+              height: 5,
+              borderRadius: '2.5px',
               bgcolor: 'rgba(255,255,255,0.08)',
               '& .MuiLinearProgress-bar': {
                 bgcolor: '#3B82F6',
@@ -228,8 +228,8 @@ const Layout = () => {
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600 }}>
-            versión 5.14
+          <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '11px' }}>
+            versión 6.1
           </Typography>
 
           <Tooltip title="Cambiar tema (Solo visual)">
@@ -257,7 +257,7 @@ const Layout = () => {
           zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
-        <Toolbar sx={{ justifyContent: 'space-between', gap: 2, px: { xs: 2, md: 3 } }}>
+        <Toolbar sx={{ justifyContent: 'space-between', gap: 2, px: { xs: 2, md: 3 }, minHeight: '52px !important' }}>
           <IconButton
             color="inherit"
             aria-label="open drawer"
@@ -268,16 +268,16 @@ const Layout = () => {
             <MenuIcon />
           </IconButton>
 
-          {/* Buscador grande con efecto glass */}
+          {/* Buscador grande con efecto glass (altura reducida) */}
           <Box
             sx={{
               display: 'flex',
               alignItems: 'center',
               bgcolor: 'rgba(255,255,255,0.05)',
               border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '16px',
-              px: 2,
-              py: 0.5,
+              borderRadius: '12px',
+              px: 1.5,
+              py: 0.2,
               width: '100%',
               maxWidth: 500,
               transition: 'all 150ms ease-in-out',
@@ -288,14 +288,14 @@ const Layout = () => {
               }
             }}
           >
-            <SearchIcon sx={{ color: '#6F7A8A', mr: 1, fontSize: '20px' }} />
+            <SearchIcon sx={{ color: '#6F7A8A', mr: 1, fontSize: '18px' }} />
             <InputBase
               placeholder="Buscar correos..."
               fullWidth
               disabled
               sx={{
                 color: '#FFFFFF',
-                fontSize: '14px',
+                fontSize: '13.5px',
                 '& .MuiInputBase-input::placeholder': {
                   color: '#6F7A8A',
                   opacity: 1
@@ -305,22 +305,23 @@ const Layout = () => {
           </Box>
 
           {/* Acciones derecha: Notificaciones, Configuración, Perfil */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
             <Tooltip title="Notificaciones">
-              <IconButton sx={{ color: '#B8C1D1' }} disabled>
-                <NotificationsIcon />
+              <IconButton sx={{ color: '#B8C1D1' }} disabled size="small">
+                <NotificationsIcon sx={{ fontSize: '20px' }} />
               </IconButton>
             </Tooltip>
             <Tooltip title="Configuración">
               <IconButton
                 sx={{ color: '#B8C1D1' }}
                 onClick={() => navigate('/configuracion')}
+                size="small"
               >
-                <SettingsIcon />
+                <SettingsIcon sx={{ fontSize: '20px' }} />
               </IconButton>
             </Tooltip>
 
-            <Divider orientation="vertical" flexItem sx={{ mx: 1, borderColor: 'rgba(255,255,255,0.08)' }} />
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5, borderColor: 'rgba(255,255,255,0.08)' }} />
 
             {/* Avatar interactivo */}
             <Box
@@ -328,10 +329,10 @@ const Layout = () => {
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 1.5,
+                gap: 1.2,
                 cursor: 'pointer',
-                p: 0.5,
-                borderRadius: '12px',
+                p: 0.3,
+                borderRadius: '10px',
                 '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
               }}
             >
@@ -339,16 +340,16 @@ const Layout = () => {
                 sx={{
                   bgcolor: '#3B82F6',
                   color: '#FFFFFF',
-                  width: 36,
-                  height: 36,
-                  fontSize: '14px',
+                  width: 30,
+                  height: 30,
+                  fontSize: '12px',
                   fontWeight: 'bold',
                   border: '2px solid rgba(255,255,255,0.1)'
                 }}
               >
                 {userInitial}
               </Avatar>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#FFFFFF', display: { xs: 'none', sm: 'block' } }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#FFFFFF', display: { xs: 'none', sm: 'block' }, fontSize: '13.5px' }}>
                 {userName}
               </Typography>
             </Box>
@@ -416,16 +417,16 @@ const Layout = () => {
         </Drawer>
       </Box>
 
-      {/* Área principal del contenido */}
+      {/* Área principal del contenido (padding y margen superior reducidos) */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: { xs: 2, md: 4 },
+          p: { xs: 2, md: 2.5 },
           width: { md: `calc(100% - ${drawerWidth}px)` },
-          mt: '64px',
+          mt: '52px',
           bgcolor: '#0F1117',
-          minHeight: 'calc(100vh - 64px)'
+          minHeight: 'calc(100vh - 52px)'
         }}
       >
         <Outlet />
