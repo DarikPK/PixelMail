@@ -31,12 +31,13 @@ import {
   ChevronLeft,
   ChevronRight
 } from '@mui/icons-material';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
 import EmailViewer from '../components/EmailViewer';
+import { useEmails } from '../contexts/EmailContext';
 
 interface EmailData {
   id: string;
@@ -44,7 +45,7 @@ interface EmailData {
   from: string;
   fromName: string;
   fromEmail: string;
-  to: string[];
+  to: any;
   cc: string[];
   bcc: string[];
   subject: string;
@@ -58,6 +59,9 @@ interface EmailData {
   starred: boolean;
   archived: boolean;
   deleted: boolean;
+  deletedAt?: any;
+  previousFolder?: string | null;
+  folderId?: string | null;
 }
 
 // Colores suaves de avatares estilo Gmail
@@ -73,8 +77,6 @@ const getAvatarColor = (name: string) => {
   const index = Math.abs(hash) % avatarColors.length;
   return avatarColors[index];
 };
-
-import { useEmails } from '../contexts/EmailContext';
 
 const Recibidos = () => {
   const { user, loading: authLoading } = useAuth();
@@ -104,6 +106,19 @@ const Recibidos = () => {
   // Menús de barra de acciones
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
   const [moveToAnchorEl, setMoveToAnchorEl] = useState<null | HTMLElement>(null);
+
+  // Sub-pestaña para la papelera de reciclaje: 0 para recibidos, 1 para enviados
+  const [trashSubTab, setTrashSubTab] = useState(0);
+
+  // Resetear la sub-pestaña al cambiar de sección
+  useEffect(() => {
+    setTrashSubTab(0);
+  }, [activeNav]);
+
+  // Limpiar selección de correos al alternar entre sub-pestañas de papelera
+  useEffect(() => {
+    setSelectedEmailIds([]);
+  }, [trashSubTab, setSelectedEmailIds]);
 
   // Sincronizar apertura de correos desde la barra lateral (mini preview)
   useEffect(() => {
@@ -139,8 +154,12 @@ const Recibidos = () => {
   const handleToggleDelete = async (e: React.MouseEvent, email: EmailData) => {
     e.stopPropagation();
     try {
+      const isSent = email.direction !== 'inbound';
+      const prev = isSent ? 'sent' : (email.archived ? 'archived' : (email.folderId || 'inbox'));
       await updateDoc(doc(db, 'emails', email.id), {
-        deleted: !email.deleted
+        deleted: !email.deleted,
+        deletedAt: new Date(),
+        previousFolder: prev
       });
     } catch (error) {
       console.error("[PIXEL MAIL INBOX] Error toggling deleted:", error);
@@ -161,9 +180,17 @@ const Recibidos = () => {
   };
 
   const handleEmptyTrash = async () => {
-    if (emails.length === 0) return;
+    // Filtrar según la sub-pestaña seleccionada (Recibidos o Enviados) en la papelera
+    const targetEmails = emails.filter((e) => {
+      if (!e.deleted) return false;
+      const isSent = e.direction !== 'inbound';
+      return trashSubTab === 1 ? isSent : !isSent;
+    });
 
-    const confirmMessage = `¿Deseas eliminar definitivamente todos los correos de la papelera? Esta acción no se puede deshacer.\n\nCantidad de correos que serán eliminados: ${emails.length}`;
+    if (targetEmails.length === 0) return;
+
+    const sectionName = trashSubTab === 1 ? 'enviados' : 'recibidos';
+    const confirmMessage = `¿Vaciar la papelera de correos ${sectionName}?\n\nSe eliminarán definitivamente todos los correos ${sectionName} que estén en Papelera.\n\nEsta acción no se puede deshacer.`;
     if (!window.confirm(confirmMessage)) return;
 
     setEmptying(true);
@@ -172,7 +199,7 @@ const Recibidos = () => {
       let batch = writeBatch(db);
       let count = 0;
 
-      for (const email of emails) {
+      for (const email of targetEmails) {
         batch.delete(doc(db, 'emails', email.id));
         count++;
 
@@ -187,7 +214,7 @@ const Recibidos = () => {
         await batch.commit();
       }
 
-      console.log("[PIXEL MAIL INBOX] Papelera vaciada con éxito.");
+      console.log(`[PIXEL MAIL INBOX] Papelera de ${sectionName} vaciada con éxito.`);
     } catch (error) {
       console.error("[PIXEL MAIL INBOX] Error al vaciar la papelera:", error);
       alert("Ocurrió un error al vaciar la papelera.");
@@ -261,8 +288,12 @@ const Recibidos = () => {
     );
   }
 
-  // Filtrado de correos según la navegación activa
+  // Filtrado de correos según la navegación activa (incluyendo enviados en papelera)
   const filteredEmails = emails.filter((email) => {
+    if (activeNav === 'eliminados') {
+      return email.deleted;
+    }
+
     if (email.direction !== 'inbound') return false;
 
     if (activeNav === 'recibidos') {
@@ -271,13 +302,44 @@ const Recibidos = () => {
       return !email.deleted && email.starred;
     } else if (activeNav === 'archivados') {
       return !email.deleted && email.archived;
-    } else if (activeNav === 'eliminados') {
-      return email.deleted;
     } else if (activeNav === 'folder') {
       return !email.deleted && email.folderId === activeFolderId;
     }
     return false;
   });
+
+  // Filtrar visibleEmails según la sub-pestaña en la papelera
+  const visibleEmails = useMemo(() => {
+    if (activeNav === 'eliminados') {
+      return filteredEmails.filter((email) => {
+        const isSent = email.direction !== 'inbound';
+        return trashSubTab === 1 ? isSent : !isSent;
+      });
+    }
+    return filteredEmails;
+  }, [filteredEmails, activeNav, trashSubTab]);
+
+  // Ordenar correos de la papelera por deletedAt desc
+  const sortedEmails = useMemo(() => {
+    const list = [...visibleEmails];
+    if (activeNav === 'eliminados') {
+      list.sort((a, b) => {
+        const timeA = a.deletedAt ? (a.deletedAt.toDate ? a.deletedAt.toDate().getTime() : new Date(a.deletedAt).getTime()) : 0;
+        const timeB = b.deletedAt ? (b.deletedAt.toDate ? b.deletedAt.toDate().getTime() : new Date(b.deletedAt).getTime()) : 0;
+        return timeB - timeA;
+      });
+    }
+    return list;
+  }, [visibleEmails, activeNav]);
+
+  // Contadores internos de la papelera
+  const trashReceivedCount = useMemo(() => {
+    return filteredEmails.filter(e => e.direction === 'inbound').length;
+  }, [filteredEmails]);
+
+  const trashSentCount = useMemo(() => {
+    return filteredEmails.filter(e => e.direction !== 'inbound').length;
+  }, [filteredEmails]);
 
   // Si hay un correo seleccionado, mostramos la vista completa del correo en lugar del listado
   const emailToShow = emails.find((e) => e.id === selectedEmailId);
@@ -323,8 +385,12 @@ const Recibidos = () => {
         }}
         onToggleDelete={async () => {
           try {
+            const isSent = emailToShow.direction !== 'inbound';
+            const prev = isSent ? 'sent' : (emailToShow.archived ? 'archived' : (emailToShow.folderId || 'inbox'));
             await updateDoc(doc(db, 'emails', emailToShow.id), {
-              deleted: !emailToShow.deleted
+              deleted: !emailToShow.deleted,
+              deletedAt: new Date(),
+              previousFolder: prev
             });
             setSelectedEmailId(null);
           } catch (error) {
@@ -368,6 +434,9 @@ const Recibidos = () => {
     dynamicTitle = f ? f.name : 'Carpeta';
   }
 
+  // Contar el número de elementos de la sección de papelera activa
+  const currentTrashCount = trashSubTab === 1 ? trashSentCount : trashReceivedCount;
+
   return (
     <Box sx={{ animation: 'fadeIn 200ms ease-in-out' }}>
       {/* Título de la sección compactado a 26px en escritorio */}
@@ -376,8 +445,8 @@ const Recibidos = () => {
           {dynamicTitle}
         </Typography>
 
-        {/* Botón Vaciar Papelera con diseño Premium */}
-        {activeNav === 'eliminados' && filteredEmails.length > 0 && (
+        {/* Botón Vaciar Papelera con diseño Premium - vacía solo la sección activa de papelera */}
+        {activeNav === 'eliminados' && currentTrashCount > 0 && (
           <Button
             variant="contained"
             color="error"
@@ -398,67 +467,113 @@ const Recibidos = () => {
             }}
             aria-label="Vaciar papelera"
           >
-            {emptying ? "Vaciando..." : `Vaciar papelera (${filteredEmails.length})`}
+            {emptying ? "Vaciando..." : `Vaciar papelera (${currentTrashCount})`}
           </Button>
         )}
       </Box>
 
-      {/* Pestañas de la Bandeja (Recibidos + Carpetas) */}
-      <Box sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Tabs
-          value={currentTabValue}
-          onChange={handleTabChange}
-          sx={{
-            minHeight: '34px',
-            '& .MuiTabs-indicator': {
-              height: '2px',
-              bgcolor: '#3B82F6',
-              borderRadius: '2px 2px 0 0'
-            }
-          }}
-        >
-          {tabHeaders.map((tab, idx) => {
-            const isActive = currentTabValue === idx;
-            return (
-              <Tab
-                key={tab.id}
-                label={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
-                    {tab.type === 'folder' && (
-                      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: tab.color }} />
-                    )}
-                    <Typography variant="body2" sx={{ fontWeight: 600, letterSpacing: '0.2px', fontSize: '11.5px' }}>
-                      {tab.label}
-                    </Typography>
-                  </Box>
-                }
-                sx={{
-                  color: isActive ? '#3B82F6 !important' : 'text.secondary',
-                  py: 0.5,
-                  px: 1.0,
-                  minHeight: '34px',
-                  minWidth: 'auto',
-                  transition: 'color 150ms ease-in-out',
-                  '&:hover': { color: 'text.primary' }
-                }}
-              />
-            );
-          })}
-        </Tabs>
-      </Box>
+      {/* Pestañas de la Bandeja (Recibidos + Carpetas) - Ocultar en la Papelera */}
+      {activeNav !== 'eliminados' && (
+        <Box sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Tabs
+            value={currentTabValue}
+            onChange={handleTabChange}
+            sx={{
+              minHeight: '34px',
+              '& .MuiTabs-indicator': {
+                height: '2px',
+                bgcolor: '#3B82F6',
+                borderRadius: '2px 2px 0 0'
+              }
+            }}
+          >
+            {tabHeaders.map((tab, idx) => {
+              const isActive = currentTabValue === idx;
+              return (
+                <Tab
+                  key={tab.id}
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                      {tab.type === 'folder' && (
+                        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: tab.color }} />
+                      )}
+                      <Typography variant="body2" sx={{ fontWeight: 600, letterSpacing: '0.2px', fontSize: '11.5px' }}>
+                        {tab.label}
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{
+                    color: isActive ? '#3B82F6 !important' : 'text.secondary',
+                    py: 0.5,
+                    px: 1.0,
+                    minHeight: '34px',
+                    minWidth: 'auto',
+                    transition: 'color 150ms ease-in-out',
+                    '&:hover': { color: 'text.primary' }
+                  }}
+                />
+              );
+            })}
+          </Tabs>
+        </Box>
+      )}
+
+      {/* Switch segmentado compacto de dos opciones exclusivo para la papelera */}
+      {activeNav === 'eliminados' && (
+        <Box sx={{ display: 'inline-flex', bgcolor: 'action.hover', p: '3px', borderRadius: '8px', border: '1px solid divider', mb: 1.5 }}>
+          <Button
+            size="small"
+            onClick={() => setTrashSubTab(0)}
+            sx={{
+              textTransform: 'none',
+              borderRadius: '6px',
+              px: 3,
+              py: 0.5,
+              fontSize: '12px',
+              fontWeight: 600,
+              bgcolor: trashSubTab === 0 ? '#3B82F6 !important' : 'transparent',
+              color: trashSubTab === 0 ? '#FFFFFF !important' : 'text.secondary',
+              '&:hover': {
+                bgcolor: trashSubTab === 0 ? '#3B82F6' : 'rgba(255,255,255,0.05)'
+              }
+            }}
+          >
+            Recibidos ({trashReceivedCount})
+          </Button>
+          <Button
+            size="small"
+            onClick={() => setTrashSubTab(1)}
+            sx={{
+              textTransform: 'none',
+              borderRadius: '6px',
+              px: 3,
+              py: 0.5,
+              fontSize: '12px',
+              fontWeight: 600,
+              bgcolor: trashSubTab === 1 ? '#3B82F6 !important' : 'transparent',
+              color: trashSubTab === 1 ? '#FFFFFF !important' : 'text.secondary',
+              '&:hover': {
+                bgcolor: trashSubTab === 1 ? '#3B82F6' : 'rgba(255,255,255,0.05)'
+              }
+            }}
+          >
+            Enviados ({trashSentCount})
+          </Button>
+        </Box>
+      )}
 
       {/* Barra de acciones horizontal (Selección múltiple e indeterminada) */}
       {(() => {
-        const allVisibleIds = filteredEmails.map(e => e.id);
-        const areAllSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selectedEmailIds.includes(id));
-        const isIndeterminate = allVisibleIds.length > 0 && allVisibleIds.some(id => selectedEmailIds.includes(id)) && !areAllSelected;
+        const allVisibleIds = visibleEmails.map((e: EmailData) => e.id);
+        const areAllSelected = allVisibleIds.length > 0 && allVisibleIds.every((id: string) => selectedEmailIds.includes(id));
+        const isIndeterminate = allVisibleIds.length > 0 && allVisibleIds.some((id: string) => selectedEmailIds.includes(id)) && !areAllSelected;
 
         const handleSelectAllToggle = () => {
           if (areAllSelected) {
-            setSelectedEmailIds(prev => prev.filter(id => !allVisibleIds.includes(id)));
+            setSelectedEmailIds(prev => prev.filter((id: string) => !allVisibleIds.includes(id)));
           } else {
             setSelectedEmailIds(prev => {
-              const otherSelected = prev.filter(id => !allVisibleIds.includes(id));
+              const otherSelected = prev.filter((id: string) => !allVisibleIds.includes(id));
               return [...otherSelected, ...allVisibleIds];
             });
           }
@@ -620,7 +735,7 @@ const Recibidos = () => {
               </Tooltip>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
                 <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 600, fontSize: '10.5px' }}>
-                  1-{filteredEmails.length} de {filteredEmails.length}
+                  1-{visibleEmails.length} de {visibleEmails.length}
                 </Typography>
                 <IconButton size="small" sx={{ color: 'text.disabled', p: 0.3 }} disabled>
                   <ChevronLeft sx={{ fontSize: '16px' }} />
@@ -640,14 +755,14 @@ const Recibidos = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress size={26} />
           </Box>
-        ) : filteredEmails.length === 0 ? (
+        ) : sortedEmails.length === 0 ? (
           <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'rgba(15,23,42,0.01)', border: '1px dashed divider' }}>
             <Typography variant="body2" color="text.secondary">
               No hay correos en esta sección.
             </Typography>
           </Paper>
         ) : (
-          filteredEmails.map((email: EmailData) => {
+          sortedEmails.map((email: EmailData) => {
             const isUnread = !email.read;
             const fromEmail = email.fromEmail || '';
             const senderName = email.fromName || (fromEmail ? fromEmail.split('@')[0] : '') || email.from || 'Remitente';
@@ -686,7 +801,7 @@ const Recibidos = () => {
                   alignItems: 'center',
                   gap: 1.0
                 }}>
-                  {/* Selección y estrella (70px) */}
+                  {/* Checkbox y Estrella */}
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }} onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       size="small"
