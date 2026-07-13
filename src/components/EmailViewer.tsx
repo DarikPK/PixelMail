@@ -37,6 +37,7 @@ interface EmailViewerProps {
   onToggleStar: () => void;
   onToggleArchive: () => void;
   onToggleDelete: () => void;
+  onDeleteForever: () => void;
   onDownloadAttachment: (filename: string) => void;
 }
 
@@ -47,6 +48,7 @@ const EmailViewer = ({
   onToggleStar,
   onToggleArchive,
   onToggleDelete,
+  onDeleteForever,
   onDownloadAttachment
 }: EmailViewerProps) => {
   return (
@@ -61,6 +63,7 @@ const EmailViewer = ({
         onToggleStar={onToggleStar}
         onToggleArchive={onToggleArchive}
         onToggleDelete={onToggleDelete}
+        onDeleteForever={onDeleteForever}
       />
 
       <Paper sx={{ p: 3, borderRadius: 3 }}>

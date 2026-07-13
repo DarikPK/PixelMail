@@ -12,7 +12,8 @@ import {
   IconButton,
   Tabs,
   Tab,
-  Tooltip
+  Tooltip,
+  Button
 } from '@mui/material';
 import {
   Star,
@@ -21,12 +22,14 @@ import {
   Delete,
   Mail,
   Drafts,
-  Attachment as AttachIcon
+  Attachment as AttachIcon,
+  RestoreFromTrash,
+  DeleteForever
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import EmailViewer from '../components/EmailViewer';
 
 interface EmailData {
@@ -57,6 +60,7 @@ const Recibidos = () => {
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0); // 0: Recibidos, 1: Destacados, 2: Archivados, 3: Eliminados
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
+  const [emptying, setEmptying] = useState(false);
 
   useEffect(() => {
     // 2. Esperar a que Firebase Authentication termine de cargar
@@ -219,6 +223,55 @@ const Recibidos = () => {
     }
   };
 
+  const handleDeleteForeverSingle = async (e: React.MouseEvent, email: EmailData) => {
+    e.stopPropagation();
+    const confirmMessage = "¿Deseas eliminar definitivamente este correo?\n\nEsta acción no se puede deshacer.";
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      await deleteDoc(doc(db, 'emails', email.id));
+      console.log(`[PIXEL MAIL INBOX] Correo ${email.id} eliminado definitivamente.`);
+    } catch (error) {
+      console.error("[PIXEL MAIL INBOX] Error al eliminar definitivamente:", error);
+    }
+  };
+
+  const handleEmptyTrash = async () => {
+    if (emails.length === 0) return;
+
+    const confirmMessage = `¿Deseas eliminar definitivamente todos los correos de la papelera? Esta acción no se puede deshacer.\n\nCantidad de correos que serán eliminados: ${emails.length}`;
+    if (!window.confirm(confirmMessage)) return;
+
+    setEmptying(true);
+    try {
+      const batchSize = 500;
+      let batch = writeBatch(db);
+      let count = 0;
+
+      for (const email of emails) {
+        batch.delete(doc(db, 'emails', email.id));
+        count++;
+
+        if (count === batchSize) {
+          await batch.commit();
+          batch = writeBatch(db);
+          count = 0;
+        }
+      }
+
+      if (count > 0) {
+        await batch.commit();
+      }
+
+      console.log("[PIXEL MAIL INBOX] Papelera vaciada con éxito.");
+    } catch (error) {
+      console.error("[PIXEL MAIL INBOX] Error al vaciar la papelera:", error);
+      alert("Ocurrió un error al vaciar la papelera.");
+    } finally {
+      setEmptying(false);
+    }
+  };
+
   const handleOpenEmail = async (email: EmailData) => {
     setSelectedEmailId(email.id);
     if (!email.read) {
@@ -318,6 +371,18 @@ const Recibidos = () => {
             console.error("[PIXEL MAIL INBOX] Error toggling delete:", error);
           }
         }}
+        onDeleteForever={async () => {
+          const confirmMessage = "¿Deseas eliminar definitivamente este correo?\n\nEsta acción no se puede deshacer.";
+          if (!window.confirm(confirmMessage)) return;
+
+          try {
+            await deleteDoc(doc(db, 'emails', emailToShow.id));
+            setSelectedEmailId(null);
+            console.log(`[PIXEL MAIL INBOX] Correo ${emailToShow.id} eliminado definitivamente.`);
+          } catch (error) {
+            console.error("[PIXEL MAIL INBOX] Error deleting email forever:", error);
+          }
+        }}
         onDownloadAttachment={handleDownloadAttachment}
       />
     );
@@ -325,11 +390,28 @@ const Recibidos = () => {
 
   return (
     <Box>
-      <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
-        Bandeja de Entrada
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 1 }}>
+        <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+          Bandeja de Entrada
+        </Typography>
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 2 }}>
+        {/* Botón Vaciar Papelera: aparece únicamente en la pestaña de Eliminados y si hay correos */}
+        {tabValue === 3 && emails.length > 0 && (
+          <Button
+            variant="contained"
+            color="error"
+            size="small"
+            startIcon={emptying ? <CircularProgress size={16} color="inherit" /> : <DeleteForever />}
+            onClick={handleEmptyTrash}
+            disabled={emptying}
+            aria-label="Vaciar papelera"
+          >
+            {emptying ? "Vaciando..." : "Vaciar papelera"}
+          </Button>
+        )}
+      </Box>
+
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
         <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
           <Tab label="Recibidos" />
           <Tab label="Destacados" />
@@ -380,10 +462,10 @@ const Recibidos = () => {
                     }}
                   >
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <IconButton size="small" onClick={(e) => handleToggleStar(e, email)}>
+                      <IconButton size="small" onClick={(e) => handleToggleStar(e, email)} aria-label="Destacar">
                         {email.starred ? <Star color="warning" /> : <StarBorder />}
                       </IconButton>
-                      <IconButton size="small" onClick={(e) => handleToggleRead(e, email)}>
+                      <IconButton size="small" onClick={(e) => handleToggleRead(e, email)} aria-label="Cambiar leido">
                         {email.read ? <Drafts color="action" /> : <Mail color="primary" />}
                       </IconButton>
                     </TableCell>
@@ -398,16 +480,33 @@ const Recibidos = () => {
                     </TableCell>
                     <TableCell>{email.receivedAt.toLocaleString()}</TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Tooltip title={email.archived ? "Mover a Recibidos" : "Archivar"}>
-                        <IconButton size="small" onClick={(e) => handleToggleArchive(e, email)}>
-                          <Archive color={email.archived ? 'primary' : 'action'} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={email.deleted ? "Restaurar" : "Eliminar"}>
-                        <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)}>
-                          <Delete color={email.deleted ? 'error' : 'action'} />
-                        </IconButton>
-                      </Tooltip>
+                      {tabValue === 3 ? (
+                        <>
+                          <Tooltip title="Restaurar">
+                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} aria-label="Restaurar">
+                              <RestoreFromTrash color="primary" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Eliminar definitivamente">
+                            <IconButton size="small" onClick={(e) => handleDeleteForeverSingle(e, email)} aria-label="Eliminar definitivamente">
+                              <DeleteForever color="error" />
+                            </IconButton>
+                          </Tooltip>
+                        </>
+                      ) : (
+                        <>
+                          <Tooltip title={email.archived ? "Mover a Recibidos" : "Archivar"}>
+                            <IconButton size="small" onClick={(e) => handleToggleArchive(e, email)} aria-label="Archivar">
+                              <Archive color={email.archived ? 'primary' : 'action'} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Eliminar">
+                            <IconButton size="small" onClick={(e) => handleToggleDelete(e, email)} aria-label="Eliminar">
+                              <Delete color="error" />
+                            </IconButton>
+                          </Tooltip>
+                        </>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

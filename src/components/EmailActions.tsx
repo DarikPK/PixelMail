@@ -9,7 +9,9 @@ import {
   Star,
   StarBorder,
   Archive,
-  Delete
+  Delete,
+  RestoreFromTrash,
+  DeleteForever
 } from '@mui/icons-material';
 
 interface EmailActionsProps {
@@ -22,6 +24,7 @@ interface EmailActionsProps {
   onToggleStar: () => void;
   onToggleArchive: () => void;
   onToggleDelete: () => void;
+  onDeleteForever: () => void;
 }
 
 const EmailActions = ({
@@ -33,7 +36,8 @@ const EmailActions = ({
   onToggleRead,
   onToggleStar,
   onToggleArchive,
-  onToggleDelete
+  onToggleDelete,
+  onDeleteForever
 }: EmailActionsProps) => {
   return (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, pb: 2, mb: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -43,6 +47,7 @@ const EmailActions = ({
           onClick={onBack}
           variant="outlined"
           size="small"
+          aria-label="Volver a la bandeja"
         >
           Volver
         </Button>
@@ -68,25 +73,44 @@ const EmailActions = ({
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
         <Tooltip title={read ? "Marcar como no leído" : "Marcar como leído"}>
-          <IconButton onClick={onToggleRead} size="small" color="primary">
+          <IconButton onClick={onToggleRead} size="small" color="primary" aria-label="Cambiar estado leído">
             {read ? <Mail /> : <Drafts />}
           </IconButton>
         </Tooltip>
         <Tooltip title={starred ? "Quitar destacado" : "Destacar"}>
-          <IconButton onClick={onToggleStar} size="small" color="warning">
+          <IconButton onClick={onToggleStar} size="small" color="warning" aria-label="Destacar correo">
             {starred ? <Star /> : <StarBorder />}
           </IconButton>
         </Tooltip>
-        <Tooltip title={archived ? "Mover a Recibidos" : "Archivar"}>
-          <IconButton onClick={onToggleArchive} size="small" color="default">
-            <Archive />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title={deleted ? "Restaurar" : "Eliminar"}>
-          <IconButton onClick={onToggleDelete} size="small" color="error">
-            <Delete />
-          </IconButton>
-        </Tooltip>
+
+        {/* Si el correo está en la papelera (deleted == true) */}
+        {deleted ? (
+          <>
+            <Tooltip title="Restaurar">
+              <IconButton onClick={onToggleDelete} size="small" color="primary" aria-label="Restaurar correo">
+                <RestoreFromTrash />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Eliminar definitivamente">
+              <IconButton onClick={onDeleteForever} size="small" color="error" aria-label="Eliminar definitivamente">
+                <DeleteForever />
+              </IconButton>
+            </Tooltip>
+          </>
+        ) : (
+          <>
+            <Tooltip title={archived ? "Mover a Recibidos" : "Archivar"}>
+              <IconButton onClick={onToggleArchive} size="small" color="default" aria-label="Archivar correo">
+                <Archive />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Eliminar">
+              <IconButton onClick={onToggleDelete} size="small" color="error" aria-label="Eliminar correo">
+                <Delete />
+              </IconButton>
+            </Tooltip>
+          </>
+        )}
       </Box>
     </Box>
   );
