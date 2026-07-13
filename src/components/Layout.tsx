@@ -18,6 +18,7 @@ import {
   Menu as MenuIcon,
   Send as SendIcon,
   Mail as MailIcon,
+  Inbox as InboxIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon
 } from '@mui/icons-material';
@@ -40,6 +41,7 @@ const Layout = () => {
   };
 
   const menuItems = [
+    { text: 'Bandeja de Entrada', icon: <InboxIcon />, path: '/recibidos' },
     { text: 'Redactar', icon: <MailIcon />, path: '/redactar' },
     { text: 'Enviados', icon: <SendIcon />, path: '/enviados' },
     { text: 'Configuración', icon: <SettingsIcon />, path: '/configuracion' },

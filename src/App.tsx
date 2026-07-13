@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import Redactar from './pages/Redactar';
 import Enviados from './pages/Enviados';
 import Configuracion from './pages/Configuracion';
+import Recibidos from './pages/Recibidos';
 import { useMemo } from 'react';
 
 function App() {
@@ -71,7 +72,8 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-              <Route index element={<Navigate to="/redactar" replace />} />
+              <Route index element={<Navigate to="/recibidos" replace />} />
+              <Route path="recibidos" element={<Recibidos />} />
               <Route path="redactar" element={<Redactar />} />
               <Route path="enviados" element={<Enviados />} />
               <Route path="configuracion" element={<Configuracion />} />

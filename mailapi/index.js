@@ -3,6 +3,7 @@ const { logger } = require("firebase-functions");
 const { Resend } = require("resend");
 const admin = require("firebase-admin");
 const Busboy = require("busboy");
+const crypto = require("crypto");
 
 admin.initializeApp();
 
@@ -53,6 +54,39 @@ function parseMultipart(req) {
       reject(err);
     }
   });
+}
+
+async function resolveUserId(toEmail) {
+  try {
+    const userRecord = await admin.auth().getUserByEmail(toEmail);
+    return userRecord.uid;
+  } catch (error) {
+    // Si la coincidencia exacta falla, intentamos coincidencia por prefijo
+    const prefix = toEmail.split('@')[0].toLowerCase();
+    try {
+      const listUsersResult = await admin.auth().listUsers();
+      for (const userRecord of listUsersResult.users) {
+        if (userRecord.email) {
+          const userPrefix = userRecord.email.split('@')[0].toLowerCase();
+          if (userPrefix === prefix || userPrefix.startsWith(prefix) || prefix.startsWith(userPrefix)) {
+            return userRecord.uid;
+          }
+        }
+      }
+    } catch (listError) {
+      logger.error("[RESEND INBOUND] Error al listar usuarios", listError);
+    }
+  }
+  // Alternativa por defecto: asignar al primer usuario que encontremos en Auth
+  try {
+    const listUsersResult = await admin.auth().listUsers(1);
+    if (listUsersResult.users.length > 0) {
+      return listUsersResult.users[0].uid;
+    }
+  } catch (e) {
+    logger.error("[RESEND INBOUND] Fallback para listar usuarios fallido", e);
+  }
+  return null;
 }
 
 exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) => {
@@ -182,5 +216,265 @@ exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) 
   } catch (error) {
     logger.error("[RESEND] error", error);
     return res.status(500).json({ error: error.message });
+  }
+});
+
+exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RESEND_API_KEY", "RESEND_WEBHOOK_SECRET"] }, async (req, res) => {
+  // 1. Aceptar únicamente solicitudes POST
+  if (req.method !== "POST") {
+    logger.error("[RESEND WEBHOOK] Method Not Allowed:", req.method);
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
+
+  // 2. Extraer cabeceras Svix
+  const svixId = req.headers["svix-id"] || req.headers["Svix-Id"];
+  const svixTimestamp = req.headers["svix-timestamp"] || req.headers["Svix-Timestamp"];
+  const svixSignature = req.headers["svix-signature"] || req.headers["Svix-Signature"];
+
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    logger.error("[RESEND WEBHOOK] Missing Svix signature headers");
+    return res.status(401).json({ error: "Unauthorized - Missing SVIX signature headers" });
+  }
+
+  // 3. Obtener el secreto
+  const secret = process.env.RESEND_WEBHOOK_SECRET;
+  if (!secret) {
+    logger.error("[RESEND WEBHOOK] RESEND_WEBHOOK_SECRET is not configured");
+    return res.status(500).json({ error: "Internal Server Error: Missing secret configuration" });
+  }
+
+  // 4. Obtener raw body para validación de la firma
+  const rawBody = req.rawBody ? req.rawBody.toString("utf8") : "";
+
+  // 5. Validar firma de Svix
+  let isValid = false;
+  try {
+    let secretKey = secret.trim();
+    if (secretKey.startsWith("whsec_")) {
+      secretKey = secretKey.substring(6);
+    }
+    const secretBuffer = Buffer.from(secretKey, "base64");
+    const toSign = `${svixId}.${svixTimestamp}.${rawBody}`;
+
+    const hmac = crypto.createHmac("sha256", secretBuffer);
+    hmac.update(toSign);
+    const computedSignature = hmac.digest("base64");
+
+    const parts = svixSignature.split(" ");
+    for (const part of parts) {
+      const kv = part.split(",");
+      if (kv.length === 2 && kv[0] === "v1") {
+        if (kv[1] === computedSignature) {
+          isValid = true;
+          break;
+        }
+      }
+    }
+  } catch (verifyError) {
+    logger.error("[RESEND WEBHOOK] Signature verification failed with exception", verifyError);
+  }
+
+  if (!isValid) {
+    logger.error("[RESEND WEBHOOK] Invalid Svix signature");
+    return res.status(401).json({ error: "Unauthorized - Invalid signature" });
+  }
+
+  // 6. Procesar Payload
+  const event = req.body || {};
+  const eventType = event.type;
+
+  if (!eventType) {
+    logger.error("[RESEND WEBHOOK] Missing event type in payload");
+    return res.status(400).json({ error: "Bad Request - Missing event type" });
+  }
+
+  // Procesar únicamente eventos email.received. Responder 200 a otros eventos para evitar reintentos.
+  if (eventType !== "email.received") {
+    logger.log(`[RESEND WEBHOOK] Ignoring non-inbound event: ${eventType}`);
+    return res.status(200).json({ success: true, ignored: true, message: `Event ${eventType} ignored` });
+  }
+
+  const emailId = event.data?.id;
+  if (!emailId) {
+    logger.error("[RESEND WEBHOOK] Missing email id in event data");
+    return res.status(400).json({ error: "Bad Request - Missing email id" });
+  }
+
+  // 7. Evitar duplicados (idempotencia)
+  const docRef = admin.firestore().collection("emails").doc(emailId);
+  try {
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
+      logger.log(`[RESEND WEBHOOK] Email ${emailId} already processed. Skipping.`);
+      return res.status(200).json({ success: true, duplicated: true });
+    }
+  } catch (dbError) {
+    logger.error("[RESEND WEBHOOK] Error checking document existence", dbError);
+    return res.status(500).json({ error: "Database Error" });
+  }
+
+  // 8. Consultar contenido completo en Resend
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  let emailContent;
+  try {
+    logger.log(`[RESEND INBOUND] Fetching complete email content for ${emailId}`);
+    emailContent = await resend.emails.get(emailId);
+    if (!emailContent || emailContent.error) {
+      throw new Error(emailContent?.error?.message || "Failed to retrieve email content from Resend");
+    }
+  } catch (fetchError) {
+    logger.error(`[RESEND INBOUND] Error retrieving email ${emailId} from Resend`, fetchError);
+    return res.status(500).json({ error: "Temporary error fetching complete email: " + fetchError.message });
+  }
+
+  // 9. Mapear parámetros y normalizar
+  const data = emailContent.data || emailContent;
+  const from = data.from || "";
+  const to = data.to || [];
+  const cc = data.cc || [];
+  const bcc = data.bcc || [];
+  const subject = data.subject || "";
+  const html = data.html || "";
+  const text = data.text || "";
+  const headers = data.headers || {};
+  const rawAttachments = data.attachments || [];
+  const createdAtString = data.created_at || new Date().toISOString();
+
+  let fromName = "";
+  let fromEmail = from;
+  const match = from.match(/^(.*?)\s*<(.*?)>$/);
+  if (match) {
+    fromName = match[1].trim().replace(/^["']|["']$/g, "");
+    fromEmail = match[2].trim();
+  }
+
+  const normalizeAddress = (val) => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val.map(v => v.trim());
+    if (typeof val === "string") return val.split(",").map(v => v.trim()).filter(Boolean);
+    return [];
+  };
+
+  const normalizedTo = normalizeAddress(to);
+  const normalizedCc = normalizeAddress(cc);
+  const normalizedBcc = normalizeAddress(bcc);
+
+  // Mapear adjuntos (solo metadata, sin binario pesado)
+  const attachmentsMeta = rawAttachments.map(att => ({
+    id: att.id || att.filename,
+    name: att.filename,
+    size: att.size || 0,
+    contentType: att.content_type || att.contentType || ""
+  }));
+
+  // Resolver destinatario a usuario de Pixel Mail
+  const targetEmail = normalizedTo[0] || "";
+  const userId = await resolveUserId(targetEmail);
+
+  if (!userId) {
+    logger.error(`[RESEND INBOUND] No user resolved for target email ${targetEmail}`);
+  }
+
+  // 10. Guardar en Firestore
+  const emailDoc = {
+    userId,
+    resendEmailId: emailId,
+    messageId: headers["message-id"] || headers["Message-ID"] || emailId,
+    from,
+    fromName,
+    fromEmail,
+    to: normalizedTo,
+    cc: normalizedCc,
+    bcc: normalizedBcc,
+    subject: subject || "(Sin asunto)",
+    text: text || "",
+    html: html || "",
+    headers: headers,
+    attachments: attachmentsMeta,
+    receivedAt: admin.firestore.Timestamp.fromDate(new Date(createdAtString)),
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    direction: "inbound",
+    status: "received",
+    read: false,
+    starred: false,
+    archived: false,
+    deleted: false
+  };
+
+  try {
+    await docRef.set(emailDoc);
+    logger.log(`[RESEND INBOUND] Email ${emailId} saved in Firestore successfully for user ${userId}`);
+    return res.status(200).json({ success: true, id: emailId });
+  } catch (saveError) {
+    logger.error(`[RESEND INBOUND] Error saving email ${emailId} in Firestore`, saveError);
+    return res.status(500).json({ error: "Failed to save inbound email in Firestore" });
+  }
+});
+
+exports.getAttachment = onRequest({ region: "us-central1", secrets: ["RESEND_API_KEY"] }, async (req, res) => {
+  const allowedOrigins = [
+    "http://localhost:5173",
+    "https://pixel-mail-a78f6.web.app",
+    "https://pixel-mail-a78f6.firebaseapp.com",
+    "https://mail.pixel.com.pe"
+  ];
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).send("");
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const idToken = authHeader.split("Bearer ")[1];
+  try {
+    await admin.auth().verifyIdToken(idToken);
+  } catch (error) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { emailId, filename } = req.query;
+  if (!emailId || !filename) {
+    return res.status(400).json({ error: "Missing emailId or filename" });
+  }
+
+  try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const emailData = await resend.emails.get(emailId);
+    const data = emailData.data || emailData;
+
+    if (!data || !data.attachments) {
+      return res.status(404).json({ error: "Email or attachments not found" });
+    }
+
+    const attachment = data.attachments.find(att => att.filename === filename);
+    if (!attachment) {
+      return res.status(404).json({ error: "Attachment not found" });
+    }
+
+    if (attachment.content) {
+      const buffer = Buffer.isBuffer(attachment.content)
+        ? attachment.content
+        : Buffer.from(attachment.content, 'base64');
+      res.setHeader('Content-Type', attachment.contentType || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
+      return res.send(buffer);
+    } else if (attachment.url) {
+      return res.redirect(attachment.url);
+    } else {
+      return res.status(404).json({ error: "Attachment content not available" });
+    }
+  } catch (err) {
+    logger.error("[RESEND ATTACHMENT] Error fetching attachment", err);
+    return res.status(500).json({ error: err.message });
   }
 });
