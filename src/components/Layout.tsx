@@ -86,7 +86,7 @@ const Layout = () => {
       </List>
       <Box sx={{ p: 2, textAlign: 'center' }}>
         <Typography variant="caption" color="text.secondary">
-          versión 5.6
+          versión 5.7
         </Typography>
       </Box>
     </div>
