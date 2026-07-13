@@ -33,7 +33,8 @@ import {
   TableRow,
   Select,
   FormControl,
-  InputLabel
+  InputLabel,
+  CircularProgress
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -79,7 +80,7 @@ function formatBytes(bytes: number): string {
 const Layout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorOpen] = useState<null | HTMLElement>(null);
-  const { user, logout } = useAuth();
+  const { user, logout, loading: authLoading } = useAuth();
   const { mode, toggleTheme } = useCustomTheme();
   const { emails, folders, counts, activeNav, activeFolderId, setActiveNav, setActiveFolderId, storageBreakdown } = useEmails();
   const navigate = useNavigate();
@@ -252,8 +253,7 @@ const Layout = () => {
       height: '100%',
       bgcolor: mode === 'dark' ? '#131722' : '#FFFFFF',
       color: mode === 'dark' ? '#FFFFFF' : '#111827',
-      p: 1.5,
-      borderRight: `1px solid ${mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.10)'}`
+      p: 1.5
     }}>
       {/* Parte superior: Logo Pixel Mail (reducido, logo: 18px-20px) */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.0, py: 1.0, px: 0.5 }}>
@@ -714,11 +714,18 @@ const Layout = () => {
           bgcolor: mode === 'dark' ? '#0F1117' : '#F4F7FB',
           minHeight: 'calc(100vh - 56px)',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          position: 'relative'
         }}
       >
-        <Box sx={{ width: '100%', maxWidth: '100%', flexGrow: 1 }}>
-          <Outlet />
+        <Box sx={{ width: '100%', maxWidth: '100%', flexGrow: 1, position: 'relative', minHeight: '100%' }}>
+          {authLoading ? (
+            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', bgcolor: 'transparent' }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : (
+            <Outlet />
+          )}
         </Box>
       </Box>
 

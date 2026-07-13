@@ -20,12 +20,12 @@ function App() {
           <Router>
             <Routes>
               <Route path="/login" element={<Login />} />
-              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+            <Route path="/" element={<Layout />}>
                 <Route index element={<Navigate to="/recibidos" replace />} />
-                <Route path="recibidos" element={<Recibidos />} />
-                <Route path="redactar" element={<Redactar />} />
-                <Route path="enviados" element={<Enviados />} />
-                <Route path="configuracion" element={<Configuracion />} />
+              <Route path="recibidos" element={<ProtectedRoute><Recibidos /></ProtectedRoute>} />
+              <Route path="redactar" element={<ProtectedRoute><Redactar /></ProtectedRoute>} />
+              <Route path="enviados" element={<ProtectedRoute><Enviados /></ProtectedRoute>} />
+              <Route path="configuracion" element={<ProtectedRoute><Configuracion /></ProtectedRoute>} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
