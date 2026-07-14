@@ -804,7 +804,7 @@ const Recibidos = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress size={26} />
           </Box>
-        ) : sortedEmails.length === 0 ? (
+        ) : (sortedEmails ?? []).length === 0 ? (
           <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'rgba(15,23,42,0.01)', border: '1px dashed divider' }}>
             <Typography variant="body2" color="text.secondary">
               No hay correos en esta sección.
@@ -815,7 +815,7 @@ const Recibidos = () => {
             // Diagnóstico temporal requerido por el usuario
             const sentTrashEmails = activeNav === 'eliminados' && trashSubTab === 1 ? sortedEmails : null;
             if (sentTrashEmails) {
-              console.log("[TRASH SENT] total:", sentTrashEmails?.length);
+              console.log("[TRASH SENT] total:", (sentTrashEmails ?? [])?.length);
               console.table(
                 (sentTrashEmails ?? []).map(email => ({
                   id: email?.id,
@@ -834,7 +834,7 @@ const Recibidos = () => {
               );
             }
 
-            return sortedEmails.map((email: EmailData) => {
+            return (sortedEmails ?? []).map((email: EmailData) => {
               if (activeNav === 'eliminados' && trashSubTab === 1) {
                 if (!email) {
                   console.error("[TRASH SENT] elemento undefined o null");
@@ -984,7 +984,7 @@ const Recibidos = () => {
                       {/* Fecha */}
                       <Box sx={{ textAlign: 'right', pr: 1 }}>
                         <Typography variant="caption" sx={{ color: isUnread ? '#3B82F6' : 'text.secondary', fontWeight: isUnread ? 700 : 500, fontSize: '11px' }}>
-                          {normalizedEmail.receivedAt.toLocaleDateString('es-PE', { month: 'short', day: 'numeric' })}
+                          {normalizedEmail.receivedAt?.toLocaleDateString ? normalizedEmail.receivedAt.toLocaleDateString('es-PE', { month: 'short', day: 'numeric' }) : 'Sin fecha'}
                         </Typography>
                       </Box>
 
