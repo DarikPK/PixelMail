@@ -46,6 +46,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useEmails } from '../contexts/EmailContext';
 import { db } from '../config/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { SignatureHTMLEditor } from '../components/signature/SignatureHTMLEditor';
 
 const PREDEFINED_COLORS = [
   '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#6366F1'
@@ -242,6 +243,9 @@ const Configuracion = () => {
 
   // Pestañas de Vista Previa
   const [previewTab, setPreviewTab] = useState(0);
+
+  // Selector del modo del Editor de Firmas (visual vs avanzado/importador)
+  const [editorMode, setEditorMode] = useState<'visual' | 'html'>('visual');
 
   // Cargar firma
   useEffect(() => {
@@ -702,8 +706,88 @@ const Configuracion = () => {
             </Box>
           );
         }
+
+        // Si el usuario selecciona el editor HTML avanzado, renderizar el SignatureHTMLEditor
+        if (editorMode === 'html') {
+          return (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Selector de Modo del Editor de Firmas */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'action.hover', p: 1.2, borderRadius: '8px', border: '1px solid divider', mb: 1, flexWrap: 'wrap', gap: 1.5 }}>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '13px' }}>
+                    Modo de Edición de Firmas
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Alterna entre el creador visual estándar y el importador/editor de firmas HTML profesional.
+                  </Typography>
+                </Box>
+
+                <Tabs
+                  value={editorMode}
+                  onChange={(_, val) => setEditorMode(val)}
+                  sx={{
+                    minHeight: '28px',
+                    '& .MuiTabs-indicator': { bgcolor: '#3B82F6' }
+                  }}
+                >
+                  <Tab value="visual" label="Constructor Visual Pixel" sx={{ fontSize: '10.5px', minHeight: '28px', py: 0.5, textTransform: 'none', fontWeight: 'bold' }} />
+                  <Tab value="html" label="Editor de Firma HTML (Avanzado)" sx={{ fontSize: '10.5px', minHeight: '28px', py: 0.5, textTransform: 'none', fontWeight: 'bold' }} />
+                </Tabs>
+              </Box>
+
+              <SignatureHTMLEditor
+                onSaveToFirebase={async (html, structureJSON) => {
+                  if (!user) return;
+                  try {
+                    await setDoc(doc(db, 'settings', user.uid), {
+                      userId: user.uid,
+                      signature: html,
+                      signatureStructure: structureJSON,
+                      updatedAt: serverTimestamp()
+                    });
+                  } catch (err) {
+                    console.error("Error al guardar desde el Editor HTML:", err);
+                  }
+                }}
+                initialStructureJSON={(() => {
+                  try {
+                    return JSON.stringify(rows);
+                  } catch (e) {
+                    return undefined;
+                  }
+                })()}
+                saving={savingSig}
+              />
+            </Box>
+          );
+        }
+
+        // Constructor Visual Estándar por defecto
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Selector de Modo del Editor de Firmas en el Constructor Visual */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'action.hover', p: 1.2, borderRadius: '8px', border: '1px solid divider', mb: 1, flexWrap: 'wrap', gap: 1.5 }}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '13px' }}>
+                  Modo de Edición de Firmas
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Alterna entre el creador visual estándar y el importador/editor de firmas HTML profesional.
+                </Typography>
+              </Box>
+
+              <Tabs
+                value={editorMode}
+                onChange={(_, val) => setEditorMode(val)}
+                sx={{
+                  minHeight: '28px',
+                  '& .MuiTabs-indicator': { bgcolor: '#3B82F6' }
+                }}
+              >
+                <Tab value="visual" label="Constructor Visual Pixel" sx={{ fontSize: '10.5px', minHeight: '28px', py: 0.5, textTransform: 'none', fontWeight: 'bold' }} />
+                <Tab value="html" label="Editor de Firma HTML (Avanzado)" sx={{ fontSize: '10.5px', minHeight: '28px', py: 0.5, textTransform: 'none', fontWeight: 'bold' }} />
+              </Tabs>
+            </Box>
 
             {/* Header del Editor de Firma */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
