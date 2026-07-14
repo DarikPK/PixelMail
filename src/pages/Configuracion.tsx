@@ -1533,6 +1533,45 @@ const Configuracion = () => {
               </FormGroup>
             </Paper>
 
+            {/* OPTIMIZACIÓN AUTOMÁTICA DE RECURSOS */}
+            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: '12px', border: '1px solid divider', bgcolor: 'background.paper' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                Optimización automática de imágenes
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                Pixel Mail analiza y optimiza automáticamente las imágenes de tu firma (reducir resolución, limpiar metadatos, comprimir sin pérdida de calidad) antes de guardarlas.
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <InputLabel>Modo de Optimización</InputLabel>
+                  <Select
+                    value={preferences.optimizationMode || 'size'}
+                    onChange={(e) => updatePreferences({ optimizationMode: e.target.value as any })}
+                    label="Modo de Optimización"
+                  >
+                    <MenuItem value="always">Siempre optimizar</MenuItem>
+                    <MenuItem value="size">Optimizar por tamaño de archivo</MenuItem>
+                    <MenuItem value="never">Nunca optimizar</MenuItem>
+                  </Select>
+                </FormControl>
+
+                {(preferences.optimizationMode === 'size' || !preferences.optimizationMode) && (
+                  <FormControl size="small" sx={{ minWidth: 200 }}>
+                    <InputLabel>Optimizar solo archivos mayores a</InputLabel>
+                    <Select
+                      value={preferences.optimizationSizeLimit || 250000}
+                      onChange={(e) => updatePreferences({ optimizationSizeLimit: Number(e.target.value) })}
+                      label="Optimizar solo archivos mayores a"
+                    >
+                      <MenuItem value={100000}>100 KB</MenuItem>
+                      <MenuItem value={250000}>250 KB (Recomendado)</MenuItem>
+                      <MenuItem value={500000}>500 KB</MenuItem>
+                    </Select>
+                  </FormControl>
+                )}
+              </Box>
+            </Paper>
+
             {/* LISTADO DE FIRMAS */}
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>

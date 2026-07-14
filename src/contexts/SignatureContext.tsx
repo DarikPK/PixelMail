@@ -14,6 +14,7 @@ import {
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { ProjectManager } from '../components/signature/ProjectManager';
+import { optimizeSignatureResourcesBeforeSave } from '../utils/imageOptimizer';
 
 export interface Signature {
   id: string;
@@ -35,6 +36,8 @@ export interface SignaturePreferences {
   includeInNewEmails: boolean;
   includeInReplies: boolean;
   includeInForwards: boolean;
+  optimizationMode?: 'always' | 'size' | 'never';
+  optimizationSizeLimit?: number; // bytes, e.g. 100000, 250000, 500000
 }
 
 interface SignatureContextType {
@@ -64,7 +67,9 @@ export const SignatureProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [preferences, setPreferences] = useState<SignaturePreferences>({
     includeInNewEmails: true,
     includeInReplies: true,
-    includeInForwards: true
+    includeInForwards: true,
+    optimizationMode: 'size',
+    optimizationSizeLimit: 250000
   });
   const [loading, setLoading] = useState(true);
 
@@ -216,7 +221,9 @@ export const SignatureProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setPreferences({
             includeInNewEmails: data.signaturePreferences.includeInNewEmails ?? true,
             includeInReplies: data.signaturePreferences.includeInReplies ?? true,
-            includeInForwards: data.signaturePreferences.includeInForwards ?? true
+            includeInForwards: data.signaturePreferences.includeInForwards ?? true,
+            optimizationMode: data.signaturePreferences.optimizationMode ?? 'size',
+            optimizationSizeLimit: data.signaturePreferences.optimizationSizeLimit ?? 250000
           });
         }
       }
@@ -252,17 +259,20 @@ export const SignatureProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       throw new Error('DUPLICATE_NAME');
     }
 
-    const sigData = {
-      name: name.trim(),
-      type,
-      html,
-      originalHtml: originalHtml || '',
-      scale,
-      updatedAt: serverTimestamp()
-    };
-
     let finalId = signatureId;
     try {
+      // Optimizar recursos e imágenes pesados / Base64 automáticamente antes de guardar
+      const optimizedHtml = await optimizeSignatureResourcesBeforeSave(html, user.uid);
+
+      const sigData = {
+        name: name.trim(),
+        type,
+        html: optimizedHtml,
+        originalHtml: originalHtml || '',
+        scale,
+        updatedAt: serverTimestamp()
+      };
+
       if (signatureId) {
         // Actualizar firma existente
         const sigRef = doc(db, 'users', user.uid, 'signatures', signatureId);
