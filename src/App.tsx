@@ -17,27 +17,27 @@ function App() {
   return (
     <CustomThemeProvider>
       <CssBaseline />
-      <AuthProvider>
-        <EmailProvider>
-          <SignatureProvider>
-            <ToastProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <EmailProvider>
+            <SignatureProvider>
               <Router>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-            <Route path="/" element={<Layout />}>
-                <Route index element={<Navigate to="/recibidos" replace />} />
-              <Route path="recibidos" element={<ProtectedRoute><Recibidos /></ProtectedRoute>} />
-              <Route path="redactar" element={<ProtectedRoute><Redactar /></ProtectedRoute>} />
-              <Route path="enviados" element={<ProtectedRoute><Enviados /></ProtectedRoute>} />
-              <Route path="configuracion" element={<ProtectedRoute><Configuracion /></ProtectedRoute>} />
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                <Routes>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/" element={<Layout />}>
+                    <Route index element={<Navigate to="/recibidos" replace />} />
+                    <Route path="recibidos" element={<ProtectedRoute><Recibidos /></ProtectedRoute>} />
+                    <Route path="redactar" element={<ProtectedRoute><Redactar /></ProtectedRoute>} />
+                    <Route path="enviados" element={<ProtectedRoute><Enviados /></ProtectedRoute>} />
+                    <Route path="configuracion" element={<ProtectedRoute><Configuracion /></ProtectedRoute>} />
+                  </Route>
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
               </Router>
-            </ToastProvider>
-          </SignatureProvider>
-        </EmailProvider>
-      </AuthProvider>
+            </SignatureProvider>
+          </EmailProvider>
+        </AuthProvider>
+      </ToastProvider>
     </CustomThemeProvider>
   );
 }
