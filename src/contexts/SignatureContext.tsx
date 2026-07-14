@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
+import { ProjectManager } from '../components/signature/ProjectManager';
 
 export interface Signature {
   id: string;
@@ -161,6 +162,35 @@ export const SignatureProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         } catch (err) {
           console.error("Error al migrar firma antigua:", err);
         }
+      }
+
+      // MIGRACIÓN DE PROYECTOS DESDE PROJECTMANAGER (LOCALSTORAGE ANTIGUO EN MEMORIA)
+      try {
+        const localProjects = ProjectManager.getAllProjects();
+        if (localProjects.length > 0) {
+          console.log("MIGRACIÓN: Se encontraron proyectos antiguos para migrar a Firestore.", localProjects.length);
+          for (const proj of localProjects) {
+            const exists = sigsList.some(s => s.name.toLowerCase().trim() === proj.name.toLowerCase().trim());
+            if (!exists) {
+              const newSigRef = doc(collection(db, 'users', user.uid, 'signatures'));
+              await setDoc(newSigRef, {
+                name: proj.name,
+                type: 'visual',
+                html: proj.rawHTML,
+                originalHtml: JSON.stringify(proj.blocks),
+                scale: 0.8,
+                isActive: false,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              });
+              console.log("MIGRACIÓN: Proyecto migrado a Firestore:", proj.name);
+            }
+          }
+          // Limpiar proyectos de memoria para que no se migren de nuevo
+          localProjects.forEach(p => ProjectManager.deleteProject(p.id));
+        }
+      } catch (err) {
+        console.error("Error durante la migración de ProjectManager a Firestore:", err);
       }
 
       setSignatures(sigsList);
