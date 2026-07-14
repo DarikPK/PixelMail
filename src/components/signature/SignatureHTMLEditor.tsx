@@ -66,6 +66,7 @@ import { generateHTMLFromStructure } from '../../pages/Configuracion';
 interface SignatureHTMLEditorProps {
   onSaveToFirebase?: (html: string, structureJSON: string) => Promise<void>;
   initialStructureJSON?: string;
+  initialHTML?: string;
   saving?: boolean;
   initialName?: string;
 }
@@ -73,6 +74,7 @@ interface SignatureHTMLEditorProps {
 export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
   onSaveToFirebase,
   initialStructureJSON,
+  initialHTML,
   saving = false,
   initialName = 'Mi Firma Profesional'
 }) => {
@@ -163,7 +165,19 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
 
   // Inicializar con firma de Firebase si existe
   useEffect(() => {
-    if (initialStructureJSON) {
+    if (initialHTML) {
+      try {
+        const enriched = injectSBIds(initialHTML);
+        setRawHTML(enriched);
+        const tree = buildDOMTree(enriched);
+        setBlocks(tree);
+        setMissingAssets(findMissingAssets(enriched));
+        setShowCatalog(false);
+        historyManagerRef.current.clear(tree);
+      } catch (e) {
+        console.error("Error al cargar HTML inicial de Firebase:", e);
+      }
+    } else if (initialStructureJSON) {
       try {
         const parsed = JSON.parse(initialStructureJSON);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -178,10 +192,10 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
           historyManagerRef.current.clear(tree);
         }
       } catch (e) {
-        console.error("Error al cargar firma inicial de Firebase:", e);
+        console.error("Error al cargar estructura inicial de Firebase:", e);
       }
     }
-  }, [initialStructureJSON]);
+  }, [initialStructureJSON, initialHTML]);
 
   // Guardar estado en el historial al realizar cambios
   const updateHTMLState = (newHTML: string) => {

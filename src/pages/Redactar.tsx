@@ -311,11 +311,40 @@ const Redactar = () => {
 
   const sendEmailProceed = async () => {
     if (!user) return;
+
+    // Obtener la firma seleccionada o la activa
+    const selectedSignature = signatures.find(s => s.id === insertedSignatureId) || activeSignature;
+
+    let bodyHtml = message;
+    let signatureHtml = '';
+
+    // Extraer el texto libre (bodyHtml) removiendo el contenedor de la firma del editor si existe
+    bodyHtml = removeSignatureFromHTML(bodyHtml);
+
+    if (addSignature) {
+      if (!selectedSignature) {
+        setError("No se pudo cargar la firma seleccionada. Recarga la página o vuelve a guardar la firma.");
+        return;
+      }
+      signatureHtml = applyScaleToHTML(selectedSignature.html, selectedSignature.scale || 0.8);
+
+      if (!signatureHtml.trim()) {
+        setError("No se pudo cargar la firma seleccionada. Recarga la página o vuelve a guardar la firma.");
+        return;
+      }
+    }
+
+    const finalHtml = addSignature ? `${bodyHtml}<br><br>${signatureHtml}` : bodyHtml;
+
+    // LOGS OBLIGATORIOS REQUERIDOS
+    console.log("SIGNATURE SELECTED", selectedSignature);
+    console.log("SIGNATURE HTML LENGTH", signatureHtml?.length ?? 0);
+    console.log("BODY HTML LENGTH", bodyHtml?.length ?? 0);
+    console.log("FINAL HTML LENGTH", finalHtml?.length ?? 0);
+
     setSending(true);
     setError('');
     setPendingAssetsDialogOpen(false);
-
-    const finalMessage = message;
 
     try {
       const idToken = await user.getIdToken();
@@ -325,7 +354,7 @@ const Redactar = () => {
         throw new Error("VITE_SEND_EMAIL_URL no configurada");
       }
 
-      const bodyTextFinal = finalMessage
+      const bodyTextFinal = finalHtml
         ?.replace(/<[^>]*>/g, "")
         .replace(/&nbsp;/g, " ");
 
@@ -333,7 +362,7 @@ const Redactar = () => {
         to,
         subject,
         textLength: bodyTextFinal?.length || 0,
-        htmlLength: finalMessage?.length || 0,
+        htmlLength: finalHtml?.length || 0,
         attachmentCount: attachments.length
       });
 
@@ -342,7 +371,7 @@ const Redactar = () => {
       formData.append('subject', subject);
       if (cc?.trim()) formData.append('cc', cc);
       if (bcc?.trim()) formData.append('bcc', bcc);
-      formData.append('html', finalMessage);
+      formData.append('html', finalHtml); // Usar finalHtml para Resend
       formData.append('text', bodyTextFinal || '');
 
       attachments.forEach((item) => {
@@ -369,7 +398,7 @@ const Redactar = () => {
 
       console.log('[RESEND] success');
 
-      // Guardar en Firestore
+      // Guardar en Firestore usando finalHtml
       await addDoc(collection(db, 'emails'), {
         userId: user.uid,
         from: user.email,
@@ -377,7 +406,7 @@ const Redactar = () => {
         cc: cc || null,
         bcc: bcc || null,
         subject,
-        body: finalMessage,
+        body: finalHtml,
         signatureApplied: addSignature,
         status: 'sent',
         attachments: attachments.map(f => ({ name: f.name, size: f.size })),

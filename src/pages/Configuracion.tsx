@@ -104,13 +104,16 @@ interface Row {
 export const generateHTMLFromStructure = (rows: Row[]): string => {
   let html = `<table cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px; font-family: 'Inter', system-ui, sans-serif; border-collapse: collapse;">`;
 
-  rows.forEach((row) => {
+  (rows ?? []).forEach((row) => {
+    if (!row) return;
     html += `<tr><td style="padding: 0;"><table cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-collapse: collapse;"><tr>`;
 
-    row.columns.forEach((col) => {
+    (row.columns ?? []).forEach((col) => {
+      if (!col) return;
       html += `<td valign="top" style="width: ${col.widthPercent}%; padding: 8px; box-sizing: border-box;">`;
 
-      col.blocks.forEach((block) => {
+      (col.blocks ?? []).forEach((block) => {
+        if (!block) return;
         const alignStyle = block.align ? `text-align: ${block.align};` : '';
         const paddingStyle = block.padding ? `padding: ${block.padding};` : 'padding: 4px 0;';
         const marginStyle = block.margin ? `margin: ${block.margin};` : '';
@@ -1145,6 +1148,7 @@ const Configuracion = () => {
                   }
                 }}
                 initialStructureJSON={editingSignature?.originalHtml || undefined}
+                initialHTML={editingSignature?.html || undefined}
                 saving={savingSig}
                 initialName={editingSignature.name}
               />
