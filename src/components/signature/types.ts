@@ -1,5 +1,8 @@
 export type BlockType =
   | 'root'
+  | 'table'
+  | 'row'
+  | 'cell'
   | 'logo'
   | 'image'
   | 'name'
@@ -27,39 +30,29 @@ export type BlockType =
 export interface SignatureBlock {
   id: string;
   type: BlockType;
-  name: string; // Nombre visible en el árbol (ej. "Datos personales", "Nombre")
-  content: string; // Texto, URL de imagen, o código HTML
-  fontFamily?: string;
-  fontSize?: string;
-  color?: string;
-  fontWeight?: string | number;
-  align?: 'left' | 'center' | 'right';
-  padding?: string;
-  margin?: string;
-  border?: string;
-  borderRadius?: string;
-  href?: string; // Enlace para botones, imágenes o links
-  buttonColor?: string;
+  name: string; // Nombre visible (ej. "Columna logo", "Nombre")
+  tagName: string; // "table", "tr", "td", "img", "a", etc.
+  domPath: string; // Ruta/Selector CSS para localizarlo en el DOM (ej. "table > tr > td")
+  content: string; // Texto plano o innerHTML
+  attributes: Record<string, string>; // Atributos HTML (href, src, alt, width, height, etc.)
+  inlineStyles: Record<string, string>; // Estilos inline parseados
   hidden?: boolean;
   locked?: boolean;
-  width?: string;
-  height?: string;
-  keepRatio?: boolean;
-  altText?: string;
-  qrShape?: 'square' | 'circle';
-  qrBorder?: string;
-  legalModel?: 'financiero' | 'corporativo' | 'confidencial' | 'estandar';
-  socialPlatform?: 'linkedin' | 'facebook' | 'instagram' | 'twitter' | 'youtube' | 'tiktok' | 'whatsapp';
-  backgroundColor?: string;
-  shadow?: string;
-  estadoType?: 'disponible' | 'reunion' | 'vacaciones' | 'fuera';
-  children?: SignatureBlock[]; // Soporte para jerarquías
+  children?: SignatureBlock[]; // Árbol jerárquico real del DOM
+}
+
+export interface AssetRecord {
+  filename: string;
+  isFound: boolean;
+  resolvedDataUrl?: string; // Base64 o Object URL para la vista previa
 }
 
 export interface SignatureProject {
   id: string;
   name: string;
-  blocks: SignatureBlock[];
+  rawHTML: string; // El HTML maestro intacto original
+  blocks: SignatureBlock[]; // El árbol simplificado del DOM
+  missingAssets: AssetRecord[]; // Registro de recursos locales/faltantes
   createdAt: string;
   updatedAt: string;
 }

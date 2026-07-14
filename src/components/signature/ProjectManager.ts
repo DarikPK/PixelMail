@@ -1,6 +1,6 @@
-import type { SignatureProject, SignatureBlock } from './types';
+import type { SignatureProject, SignatureBlock, AssetRecord } from './types';
 
-const STORAGE_KEY = 'pixelmail_signature_projects';
+const STORAGE_KEY = 'pixelmail_signature_projects_dom';
 
 export class ProjectManager {
   /**
@@ -19,7 +19,13 @@ export class ProjectManager {
   /**
    * Guarda un proyecto nuevo o existente en localStorage
    */
-  public static saveProject(name: string, blocks: SignatureBlock[], projectId?: string): SignatureProject {
+  public static saveProject(
+    name: string,
+    rawHTML: string,
+    blocks: SignatureBlock[],
+    missingAssets: AssetRecord[],
+    projectId?: string
+  ): SignatureProject {
     const projects = this.getAllProjects();
     const id = projectId || 'proj-' + Date.now();
     const now = new Date().toISOString();
@@ -29,7 +35,9 @@ export class ProjectManager {
     const project: SignatureProject = {
       id,
       name: name.trim() || 'Firma Sin Nombre',
+      rawHTML,
       blocks,
+      missingAssets,
       createdAt: existingIndex >= 0 ? projects[existingIndex].createdAt : now,
       updatedAt: now
     };
