@@ -231,35 +231,70 @@ export const optimizeImage = async (
  * Devuelve la URL de descarga pública.
  */
 export const uploadBase64ToStorage = async (base64: string, userId: string, _filename: string): Promise<string> => {
+  console.log("STORAGE UPLOAD START", { userId, _filename });
+  console.log("STORAGE AUTH UID", userId);
+  console.log("STORAGE BUCKET", storage.app.options.storageBucket);
+
   const hash = await getBase64SHA256(base64);
   const arr = base64.split(',');
   const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
   const ext = mime.split('/')[1] || 'png';
 
-  // Ruta única en Storage: users/{userId}/signatures/assets/{hash}.{ext}
-  const storagePath = `users/${userId}/signatures/assets/${hash}.${ext}`;
+  // Ruta pública de firma: public/signatures/resources/{userId}/{hash}.{ext}
+  const storagePath = `public/signatures/resources/${userId}/${hash}.${ext}`;
+  console.log("STORAGE PATH", storagePath);
   const assetRef = ref(storage, storagePath);
 
   try {
     // 1. Intentar obtener URL de descarga para ver si ya existe (DEDUPLICACIÓN)
     const existingUrl = await getDownloadURL(assetRef);
     console.log("RECURSO EXISTENTE: Reutilizando imagen ya subida a Storage.", storagePath);
+    console.log("STORAGE DOWNLOAD URL SUCCESS", existingUrl);
     return existingUrl;
   } catch (err) {
-    // Si no existe (arroja error), proceder a subir
-    console.log("SUBIDA AUTOMÁTICA: Subiendo nueva imagen a Firebase Storage.", storagePath);
+    // Si no existe, proceder a subir
+    console.log("SUBIDA AUTOMÁTICA: Iniciando subida de nueva imagen a Firebase Storage...", storagePath);
 
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
+    try {
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+
+      const blob = new Blob([u8arr], { type: mime });
+
+      // Subir blob
+      await uploadBytes(assetRef, blob);
+      console.log("STORAGE UPLOAD SUCCESS", storagePath);
+
+      const url = await getDownloadURL(assetRef);
+      console.log("STORAGE DOWNLOAD URL SUCCESS", url);
+      return url;
+    } catch (uploadErr: any) {
+      const code = uploadErr.code || 'storage/unknown';
+      const message = uploadErr.message || 'Error desconocido al subir';
+      const serverResponse = uploadErr.serverResponse || 'Sin respuesta del servidor';
+
+      console.error("STORAGE ERROR CODE", code);
+      console.error("STORAGE ERROR MESSAGE", message);
+      console.error("STORAGE SERVER RESPONSE", serverResponse);
+
+      // Mapear código de error de Storage a un mensaje amigable
+      let friendlyMessage = 'Error al subir la imagen a la nube.';
+      if (code === 'storage/unauthorized') {
+        friendlyMessage = 'No tienes permisos para guardar este recurso.';
+      } else if (code === 'storage/object-not-found') {
+        friendlyMessage = 'El recurso no fue encontrado después de la carga.';
+      } else if (code === 'storage/bucket-not-found') {
+        friendlyMessage = 'La configuración de Firebase Storage es incorrecta.';
+      } else if (code === 'storage/unauthenticated') {
+        friendlyMessage = 'La sesión expiró. Vuelve a iniciar sesión.';
+      }
+
+      throw new Error(`${friendlyMessage} (${code})`);
     }
-
-    const blob = new Blob([u8arr], { type: mime });
-    await uploadBytes(assetRef, blob);
-    const url = await getDownloadURL(assetRef);
-    return url;
   }
 };
 
