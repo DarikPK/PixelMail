@@ -3,6 +3,8 @@ import { CssBaseline } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { CustomThemeProvider } from './contexts/ThemeContext';
 import { EmailProvider } from './contexts/EmailContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { SignatureProvider } from './contexts/SignatureContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -17,7 +19,9 @@ function App() {
       <CssBaseline />
       <AuthProvider>
         <EmailProvider>
-          <Router>
+          <SignatureProvider>
+            <ToastProvider>
+              <Router>
             <Routes>
               <Route path="/login" element={<Login />} />
             <Route path="/" element={<Layout />}>
@@ -29,7 +33,9 @@ function App() {
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </Router>
+              </Router>
+            </ToastProvider>
+          </SignatureProvider>
         </EmailProvider>
       </AuthProvider>
     </CustomThemeProvider>

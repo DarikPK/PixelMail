@@ -67,12 +67,14 @@ interface SignatureHTMLEditorProps {
   onSaveToFirebase?: (html: string, structureJSON: string) => Promise<void>;
   initialStructureJSON?: string;
   saving?: boolean;
+  initialName?: string;
 }
 
 export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
   onSaveToFirebase,
   initialStructureJSON,
-  saving = false
+  saving = false,
+  initialName = 'Mi Firma Profesional'
 }) => {
   // HTML maestro original con IDs inyectados
   const [rawHTML, setRawHTML] = useState<string>('');
@@ -85,7 +87,13 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
   const [missingAssets, setMissingAssets] = useState<AssetRecord[]>([]);
 
   // Proyecto e Historial
-  const [projectName, setProjectName] = useState<string>('Mi Firma Profesional');
+  const [projectName, setProjectName] = useState<string>(initialName);
+
+  useEffect(() => {
+    if (initialName) {
+      setProjectName(initialName);
+    }
+  }, [initialName]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [savedProjects, setSavedProjects] = useState<SignatureProject[]>([]);
 
