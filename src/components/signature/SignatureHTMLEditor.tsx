@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -19,7 +19,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress
+  CircularProgress,
+  Collapse
 } from '@mui/material';
 import {
   Undo as UndoIcon,
@@ -34,7 +35,11 @@ import {
   ZoomOut as ZoomOutIcon,
   FactCheck as AuditIcon,
   Delete as DeleteIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  KeyboardArrowDown as ArrowDownIcon,
+  KeyboardArrowRight as ArrowRightIcon,
+  CheckCircle as SuccessIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 
 import type { SignatureBlock, SignatureProject, AssetRecord } from './types';
@@ -42,7 +47,6 @@ import {
   injectSBIds,
   sanitizeHTML,
   findMissingAssets,
-  resolveLocalAssets,
   buildDOMTree,
   updateHTMLNode
 } from './BlockParser';
@@ -96,6 +100,47 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile' | 'outlook' | 'gmail' | 'apple'>('desktop');
   const [zoom, setZoom] = useState<number>(100);
   const [gridVisible, setGridVisible] = useState<boolean>(true);
+
+  // Buscador de componentes
+  const [searchComponentQuery, setSearchComponentQuery] = useState<string>('');
+
+  // Categorías colapsables colapsadas/expandidas persistidas en la sesión
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = sessionStorage.getItem('pixelmail_sig_categories');
+      return saved ? JSON.parse(saved) : {
+        'Básicos': false,
+        'Imágenes': false,
+        'Contacto': false,
+        'Acciones': false,
+        'Social': false,
+        'Legal': false
+      };
+    } catch (e) {
+      return {
+        'Básicos': false,
+        'Imágenes': false,
+        'Contacto': false,
+        'Acciones': false,
+        'Social': false,
+        'Legal': false
+      };
+    }
+  });
+
+  // Guardar colapso de categorías
+  useEffect(() => {
+    sessionStorage.setItem('pixelmail_sig_categories', JSON.stringify(collapsedCategories));
+  }, [collapsedCategories]);
+
+  // Mensaje flotante de confirmación visual
+  const [toastMessage, setToastMessage] = useState<string>('');
+
+  // Modales de visualización de recursos y confirmación
+  const [viewAsset, setViewAsset] = useState<AssetRecord | null>(null);
+  const [viewAssetMetadata, setViewAssetMetadata] = useState<{ dimensions: string; size: string; type: string } | null>(null);
+  const [replaceMultipleOpen, setReplaceMultipleOpen] = useState(false);
+  const [replaceMultipleData, setReplaceMultipleData] = useState<{ filename: string; dataUrl: string; occurrences: number } | null>(null);
 
   // Menús de Importación / Exportación
   const [importAnchorEl, setImportAnchorEl] = useState<null | HTMLElement>(null);
@@ -227,17 +272,158 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
     historyManagerRef.current.clear(tree);
   };
 
-  // Resolver un recurso local cargado Base64
+  // Resolver / Reemplazar un recurso local
   const handleResolveAsset = (filename: string, dataUrl: string) => {
+    // Buscar ocurrencias en el HTML
+    const parser = new DOMParser();
+    const docParser = parser.parseFromString(rawHTML, 'text/html');
+    const imgs = docParser.querySelectorAll('img');
+
+    let occurrences = 0;
+    imgs.forEach((img) => {
+      const src = img.getAttribute('src') || '';
+      if (src.includes(filename)) {
+        occurrences++;
+      }
+    });
+
+    if (occurrences > 1) {
+      // Si se utiliza en más de un lugar, preguntar antes
+      setReplaceMultipleData({ filename, dataUrl, occurrences });
+      setReplaceMultipleOpen(true);
+    } else {
+      applyAssetReplacement(filename, dataUrl, true);
+    }
+  };
+
+  const applyAssetReplacement = (filename: string, dataUrl: string, replaceAll: boolean) => {
+    const parser = new DOMParser();
+    const docParser = parser.parseFromString(rawHTML, 'text/html');
+    const imgs = docParser.querySelectorAll('img');
+
+    imgs.forEach((img) => {
+      const src = img.getAttribute('src') || '';
+      const isMatch = src.includes(filename);
+
+      if (isMatch) {
+        if (replaceAll) {
+          img.setAttribute('src', dataUrl);
+        } else {
+          // Reemplazar solo si está seleccionado actualmente
+          const sbId = img.getAttribute('data-sb-id');
+          if (sbId === selectedBlockId) {
+            img.setAttribute('src', dataUrl);
+          }
+        }
+      }
+    });
+
+    const nextHTML = docParser.body.innerHTML;
+
+    // Actualizar registro de assets
     const updatedAssets = missingAssets.map((a) =>
       a.filename === filename ? { ...a, isFound: true, resolvedDataUrl: dataUrl } : a
     );
-    setMissingAssets(updatedAssets);
+    // Si no existía, agregarlo a vinculados
+    if (!updatedAssets.some((a) => a.filename === filename)) {
+      updatedAssets.push({ filename, isFound: true, resolvedDataUrl: dataUrl });
+    }
 
-    // Reemplazar rutas en el HTML activo
-    const updatedHTML = resolveLocalAssets(rawHTML, updatedAssets);
-    setRawHTML(updatedHTML);
-    setBlocks(buildDOMTree(updatedHTML));
+    setMissingAssets(updatedAssets);
+    updateHTMLState(nextHTML);
+    setReplaceMultipleOpen(false);
+    setReplaceMultipleData(null);
+    showToast('Recurso reemplazado con éxito');
+  };
+
+  // Reemplazar recurso manual desde el selector
+  const handleLocalImageUpload = (e: React.ChangeEvent<HTMLInputElement>, filename: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('La imagen es demasiado grande (máximo 2MB).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      handleResolveAsset(filename, base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Visualizar detalles del recurso (Ver)
+  const handleViewAssetDetails = (asset: AssetRecord) => {
+    setViewAsset(asset);
+
+    // Obtener metadatos de dimensiones y tamaño estimulados
+    if (asset.resolvedDataUrl) {
+      const img = new Image();
+      img.src = asset.resolvedDataUrl;
+      img.onload = () => {
+        const approxSize = Math.round((asset.resolvedDataUrl!.length * 3) / 4 / 1024);
+        setViewAssetMetadata({
+          dimensions: `${img.width} x ${img.height} px`,
+          size: `${approxSize} KB`,
+          type: asset.resolvedDataUrl!.split(';')[0].split(':')[1] || 'Imagen'
+        });
+      };
+    } else {
+      setViewAssetMetadata(null);
+    }
+  };
+
+  // Descargar recurso
+  const handleDownloadAsset = (asset: AssetRecord) => {
+    if (!asset.resolvedDataUrl) return;
+    const link = document.createElement('a');
+    link.href = asset.resolvedDataUrl;
+    link.download = asset.filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  // Restaurar ruta original del recurso
+  const handleRestoreAssetPath = (asset: AssetRecord) => {
+    if (window.confirm(`¿Deseas restaurar la ruta original "${asset.filename}" de este recurso?`)) {
+      const parser = new DOMParser();
+      const docParser = parser.parseFromString(rawHTML, 'text/html');
+
+      docParser.querySelectorAll('img').forEach((img) => {
+        const src = img.getAttribute('src') || '';
+        if (src === asset.resolvedDataUrl) {
+          img.setAttribute('src', `assets/${asset.filename}`);
+        }
+      });
+
+      const nextHTML = docParser.body.innerHTML;
+      const updatedAssets = missingAssets.map((a) =>
+        a.filename === asset.filename ? { ...a, isFound: false, resolvedDataUrl: undefined } : a
+      );
+      setMissingAssets(updatedAssets);
+      updateHTMLState(nextHTML);
+      showToast('Ruta de recurso restaurada');
+    }
+  };
+
+  // Eliminar asociación del recurso
+  const handleUnlinkAsset = (filename: string) => {
+    if (window.confirm('¿Deseas desvincular este recurso y marcarlo como pendiente de carga?')) {
+      const updatedAssets = missingAssets.map((a) =>
+        a.filename === filename ? { ...a, isFound: false, resolvedDataUrl: undefined } : a
+      );
+      setMissingAssets(updatedAssets);
+      showToast('Recurso desvinculado');
+    }
+  };
+
+  // Mostrar mensaje flotante temporal
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 2500);
   };
 
   // Copiar / Exportar
@@ -278,7 +464,7 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
       await onSaveToFirebase(html, structureJSON);
     }
 
-    alert('¡Firma guardada exitosamente en tus proyectos y servidor!');
+    showToast('Firma guardada en la base de datos');
   };
 
   const handleLoadProject = (proj: SignatureProject) => {
@@ -349,7 +535,6 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
   };
 
   const handleUpdateBlockMeta = (id: string, updates: Partial<SignatureBlock>) => {
-    // Para ocultar o bloquear metadatos locales
     const nextBlocks = blocks.map((b) => (b.id === id ? { ...b, ...updates } : b));
     setBlocks(nextBlocks);
   };
@@ -367,7 +552,6 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
         if (src.startsWith('data:image')) {
           img.setAttribute('src', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100&h=100');
         }
-        // Quitar radios de bordes
         img.style.borderRadius = '';
       });
 
@@ -376,31 +560,39 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
         const htmlEl = el as HTMLElement;
         htmlEl.style.borderRadius = '';
         htmlEl.style.boxShadow = '';
-        htmlEl.style.display = ''; // Remover flex
+        htmlEl.style.display = '';
       });
 
       const nextHTML = docParser.body.innerHTML;
       updateHTMLState(nextHTML);
-      alert('¡Firma optimizada para Outlook! Se reemplazaron imágenes Base64 por imágenes remotas seguras y se removieron estilos de esquinas redondeadas/sombras que deforma Outlook Desktop.');
+      alert('¡Firma optimizada para Outlook!');
     }
   };
 
   // Insertar componente de biblioteca en la firma HTML activa
   const handleInsertLibraryComponent = (comp: any) => {
-    // Generar el HTML del componente usando la estructura de sus bloques
     const compHTML = generateHTMLFromStructure(comp.blocks);
-
-    // Inyectar al final del body del rawHTML
     const parser = new DOMParser();
     const docParser = parser.parseFromString(rawHTML, 'text/html');
 
     const wrapper = docParser.createElement('div');
     wrapper.innerHTML = compHTML;
 
-    docParser.body.appendChild(wrapper);
+    // Insertar después del seleccionado, si existe
+    if (selectedBlockId) {
+      const el = docParser.querySelector(`[data-sb-id="${selectedBlockId}"]`);
+      if (el && el.parentElement) {
+        el.parentElement.insertBefore(wrapper, el.nextSibling);
+      } else {
+        docParser.body.appendChild(wrapper);
+      }
+    } else {
+      docParser.body.appendChild(wrapper);
+    }
 
     const nextHTML = docParser.body.innerHTML;
     updateHTMLState(nextHTML);
+    showToast('Componente insertado con éxito');
   };
 
   // Encontrar recursivamente el bloque seleccionado
@@ -417,8 +609,84 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
 
   const selectedBlock = findSelectedBlockRecursively(blocks);
 
+  // Filtrado de componentes según buscador
+  const filteredComponents = useMemo<any[]>(() => {
+    const query = searchComponentQuery.trim().toLowerCase();
+    if (!query) return PREDEFINED_COMPONENTS;
+
+    return PREDEFINED_COMPONENTS.filter((comp: any) => {
+      const matchName = comp.name.toLowerCase().includes(query);
+      const matchCategory = comp.category.toLowerCase().includes(query);
+      const matchDesc = comp.description.toLowerCase().includes(query);
+      const matchKeywords = comp.keywords && comp.keywords.some((k: string) => k.toLowerCase().includes(query));
+
+      return matchName || matchCategory || matchDesc || matchKeywords;
+    });
+  }, [searchComponentQuery]);
+
+  // Agrupamiento por categorías
+  const groupedComponents = useMemo<Record<string, any[]>>(() => {
+    const groups: Record<string, any[]> = {
+      'Básicos': [],
+      'Imágenes': [],
+      'Contacto': [],
+      'Acciones': [],
+      'Social': [],
+      'Legal': []
+    };
+
+    filteredComponents.forEach((comp: any) => {
+      const cat = comp.category || 'Básicos';
+      if (!groups[cat]) {
+        groups[cat] = [];
+      }
+      groups[cat].push(comp);
+    });
+
+    return groups;
+  }, [filteredComponents]);
+
+  const toggleCategoryCollapse = (cat: string) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [cat]: !prev[cat]
+    }));
+  };
+
+  // Dividir recursos en Pendientes (Faltantes) y Vinculados (Resueltos)
+  const pendingAssets = missingAssets.filter(a => !a.isFound);
+  const linkedAssets = missingAssets.filter(a => a.isFound);
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, animation: 'fadeIn 150ms ease-in-out' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, animation: 'fadeIn 150ms ease-in-out', position: 'relative' }}>
+
+      {/* MENSAJE FLOTANTE TOAST DE CONFIRMACIÓN */}
+      {toastMessage && (
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            bgcolor: '#1E293B',
+            color: '#FFFFFF',
+            px: 2.5,
+            py: 1.2,
+            borderRadius: '24px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.0,
+            animation: 'fadeInUp 200ms ease-out'
+          }}
+        >
+          <SuccessIcon sx={{ color: '#10B981', fontSize: '18px' }} />
+          <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '12px' }}>
+            {toastMessage}
+          </Typography>
+        </Box>
+      )}
 
       {/* HEADER DE CONTROLES DEL EDITOR */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5, pb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -428,12 +696,14 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
             onChange={(e) => setProjectName(e.target.value)}
             size="small"
             placeholder="Nombre del Proyecto"
-            sx={{
-              '& .MuiInputBase-input': {
-                fontWeight: 'bold',
-                fontSize: '14.5px',
-                color: 'text.primary',
-                width: '180px'
+            slotProps={{
+              input: {
+                sx: {
+                  fontWeight: 'bold',
+                  fontSize: '14.5px',
+                  color: 'text.primary',
+                  width: '180px'
+                }
               }
             }}
           />
@@ -617,19 +887,112 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
 
       {/* WORKSPACE DE EDICIÓN EN 3 PANELES */}
       {!showCatalog && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '210px 1fr 230px' }, gap: 2, animation: 'fadeIn 120ms ease' }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '300px 1fr 240px' }, gap: 2, animation: 'fadeIn 120ms ease' }}>
 
-          {/* PANEL IZQUIERDO: Árbol DOM de la Firma y Biblioteca */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* PANEL IZQUIERDO REDISEÑADO: Biblioteca y Estructura */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: 'calc(100vh - 120px)', overflow: 'hidden' }}>
 
-            {/* ÁRBOL DE BLOQUES DE LA FIRMA */}
-            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: '8px', border: '1px solid divider', bgcolor: 'background.paper' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, fontSize: '12px' }}>
-                🗂 Estructura Real del HTML
+            {/* BUSCADOR DE COMPONENTES FIJO */}
+            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: '8px', border: '1px solid divider', display: 'flex', flexDirection: 'column', gap: 1.0, flexShrink: 0 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '12px', color: 'text.primary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                🔍 Biblioteca de Componentes
               </Typography>
-              <Divider sx={{ mb: 1.5 }} />
+              <TextField
+                placeholder="Buscar componente..."
+                size="small"
+                fullWidth
+                value={searchComponentQuery}
+                onChange={(e) => setSearchComponentQuery(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: <SearchIcon sx={{ fontSize: '16px', color: 'text.secondary', mr: 0.8 }} />,
+                    sx: { fontSize: '12px' }
+                  }
+                }}
+              />
+            </Paper>
 
-              <Box sx={{ maxHeight: '380px', overflowY: 'auto' }}>
+            {/* LISTA DE COMPONENTES AGRUPADOS CON SCROLL VERTICAL INTERNO */}
+            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: '8px', border: '1px solid divider', bgcolor: 'background.paper', flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <Box sx={{ overflowY: 'auto', flexGrow: 1, pr: 0.5 }}>
+                {Object.entries(groupedComponents).map(([cat, list]) => {
+                  if (list.length === 0) return null;
+                  const isCollapsed = !!collapsedCategories[cat];
+
+                  return (
+                    <Box key={cat} sx={{ mb: 1.5 }}>
+                      {/* Cabecera de Categoría Desplegable */}
+                      <Box
+                        onClick={() => toggleCategoryCollapse(cat)}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          p: '4px 6px',
+                          borderRadius: '4px',
+                          bgcolor: 'action.hover',
+                          mb: 0.8,
+                          '&:hover': { bgcolor: 'action.selected' }
+                        }}
+                      >
+                        <Typography variant="caption" sx={{ fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'text.secondary', fontSize: '9.5px' }}>
+                          {cat} ({list.length})
+                        </Typography>
+                        {isCollapsed ? <ArrowRightIcon sx={{ fontSize: '14px' }} /> : <ArrowDownIcon sx={{ fontSize: '14px' }} />}
+                      </Box>
+
+                      {/* Componentes de la Categoría */}
+                      <Collapse in={!isCollapsed} timeout="auto" unmountOnExit>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.0 }}>
+                          {list.map((comp) => (
+                            <Tooltip key={comp.id} title={`${comp.name}: ${comp.description}`} placement="right">
+                              <Card
+                                variant="outlined"
+                                onClick={() => handleInsertLibraryComponent(comp)}
+                                sx={{
+                                  p: 1.2,
+                                  cursor: 'pointer',
+                                  borderRadius: '6px',
+                                  transition: 'all 120ms',
+                                  borderColor: 'divider',
+                                  '&:hover': {
+                                    borderColor: '#3B82F6',
+                                    bgcolor: 'rgba(59,130,246,0.02)',
+                                    transform: 'translateX(2px)',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                                  }
+                                }}
+                              >
+                                <Box sx={{ display: 'flex', gap: 1.0, alignItems: 'flex-start' }}>
+                                  <span style={{ fontSize: '20px', display: 'block', marginTop: '2px' }}>{comp.icon}</span>
+                                  <Box sx={{ minWidth: 0 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '11.5px', color: 'text.primary', display: 'block', lineHeight: 1.2 }}>
+                                      {comp.name}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '9px', lineHeight: 1.3, mt: 0.2 }}>
+                                      {comp.description}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              </Card>
+                            </Tooltip>
+                          ))}
+                        </Box>
+                      </Collapse>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Paper>
+
+            {/* ÁRBOL DE ESTRUCTURA REAL (Fijo al final) */}
+            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: '8px', border: '1px solid divider', bgcolor: 'background.paper', maxHeight: '200px', display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: 0 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, fontSize: '11px', color: 'text.secondary' }}>
+                🗂 Estructura del HTML
+              </Typography>
+              <Divider sx={{ mb: 1 }} />
+              <Box sx={{ overflowY: 'auto', flexGrow: 1 }}>
                 <DOMTreePanel
                   blocks={blocks}
                   selectedBlockId={selectedBlockId}
@@ -637,37 +1000,6 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
                   onDeleteBlock={handleDeleteNodeDOM}
                   onUpdateBlockProperties={handleUpdateBlockMeta}
                 />
-              </Box>
-            </Paper>
-
-            {/* BIBLIOTECA DE COMPONENTES ADICIONALES */}
-            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: '8px', border: '1px solid divider', bgcolor: 'background.paper' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, fontSize: '12px' }}>
-                📦 Insertar Componente
-              </Typography>
-              <Divider sx={{ mb: 1.5 }} />
-
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: '200px', overflowY: 'auto' }}>
-                {PREDEFINED_COMPONENTS.map((comp: any) => (
-                  <Card
-                    key={comp.id}
-                    variant="outlined"
-                    onClick={() => handleInsertLibraryComponent(comp)}
-                    sx={{
-                      p: 1,
-                      cursor: 'pointer',
-                      borderRadius: '5px',
-                      '&:hover': { borderColor: '#3B82F6', bgcolor: 'action.hover' }
-                    }}
-                  >
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '10.5px' }}>
-                      {comp.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '8.5px', lineHeight: 1.2 }}>
-                      {comp.description}
-                    </Typography>
-                  </Card>
-                ))}
               </Box>
             </Paper>
           </Box>
@@ -736,20 +1068,99 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
             )}
           </Box>
 
-          {/* PANEL DERECHO: Inspector de Propiedades y Auditoría Outlook */}
+          {/* PANEL DERECHO: Inspector, Recursos Reemplazables y Auditoría */}
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Tabs value={rightSidebarTab} onChange={(_, v) => setRightSidebarTab(v)} variant="fullWidth" sx={{ minHeight: '28px', borderBottom: '1px solid divider' }}>
               <Tab icon={<SettingsIcon sx={{ fontSize: '14px' }} />} iconPosition="start" label="Propiedades" sx={{ fontSize: '10px', minHeight: '28px', textTransform: 'none' }} />
               <Tab icon={<AuditIcon sx={{ fontSize: '14px' }} />} iconPosition="start" label="Outlook Auditoría" sx={{ fontSize: '10px', minHeight: '28px', textTransform: 'none' }} />
             </Tabs>
 
+            {/* SECCIÓN RECURSOS VINCULADOS / PENDIENTES REDISEÑADA COMPACTA */}
+            <Paper variant="outlined" sx={{ p: 1.2, borderRadius: '8px', border: '1px solid divider', bgcolor: 'background.paper', mb: 1.0, flexShrink: 0 }}>
+              <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary', mb: 1, textTransform: 'uppercase', fontSize: '9px' }}>
+                🖼 Gestión de Recursos e Imágenes
+              </Typography>
+
+              {/* Recursos pendientes */}
+              {pendingAssets.length > 0 ? (
+                <Box sx={{ mb: 1.5, p: 1, borderRadius: '6px', bgcolor: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.15)' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#B45309', fontSize: '8.5px', display: 'block', mb: 1 }}>
+                    Recursos pendientes ({pendingAssets.length})
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6 }}>
+                    {pendingAssets.map((asset) => (
+                      <Box key={asset.filename} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#FFF', p: '4px 6px', borderRadius: '4px', border: '1px solid divider' }}>
+                        <Typography variant="caption" noWrap sx={{ fontSize: '8.5px', maxWidth: 100 }}>{asset.filename}</Typography>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          component="label"
+                          startIcon={<UploadIcon sx={{ fontSize: '9px' }} />}
+                          sx={{ fontSize: '8px', p: '1px 4px', height: '18px', textTransform: 'none' }}
+                        >
+                          Vincular
+                          <input type="file" accept="image/*" onChange={(e) => handleLocalImageUpload(e, asset.filename)} style={{ display: 'none' }} />
+                        </Button>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              ) : (
+                <Box sx={{ mb: 1.0, p: 1, borderRadius: '6px', bgcolor: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#10B981', fontSize: '9px', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <SuccessIcon sx={{ fontSize: '12px' }} /> Todos los recursos están vinculados correctamente.
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Recursos vinculados (Siempre visibles e interactivos, tal como fue solicitado) */}
+              {linkedAssets.length > 0 && (
+                <Box>
+                  <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary', fontSize: '8.5px', display: 'block', mb: 0.8 }}>
+                    Recursos vinculados ({linkedAssets.length})
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6, maxHeight: '160px', overflowY: 'auto' }}>
+                    {linkedAssets.map((asset) => (
+                      <Box key={asset.filename} sx={{ display: 'flex', flexDirection: 'column', gap: 0.4, bgcolor: 'action.hover', p: 0.8, borderRadius: '6px', border: '1px solid divider' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="caption" noWrap sx={{ fontSize: '8.5px', fontWeight: 'bold', maxWidth: 110 }}>
+                            {asset.filename}
+                          </Typography>
+                          <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#8B5CF6', padding: '1px 5px', borderRadius: '10px', backgroundColor: 'rgba(139,92,246,0.1)' }}>
+                            Vinculado
+                          </span>
+                        </Box>
+
+                        {/* Botones de acción enriquecidos */}
+                        <Box sx={{ display: 'flex', gap: 0.4, mt: 0.4 }}>
+                          <Button size="small" onClick={() => handleViewAssetDetails(asset)} sx={{ fontSize: '8px', p: '1px 4px', height: '18px', textTransform: 'none' }}>Ver</Button>
+                          <Button
+                            size="small"
+                            component="label"
+                            sx={{ fontSize: '8px', p: '1px 4px', height: '18px', textTransform: 'none', color: '#3B82F6', fontWeight: 'bold' }}
+                          >
+                            Reemplazar
+                            <input type="file" accept="image/*" onChange={(e) => handleLocalImageUpload(e, asset.filename)} style={{ display: 'none' }} />
+                          </Button>
+                          <Button size="small" onClick={() => handleDownloadAsset(asset)} sx={{ fontSize: '8px', p: '1px 4px', height: '18px', textTransform: 'none', color: 'text.secondary' }}>Descargar</Button>
+                          <Button size="small" onClick={() => handleRestoreAssetPath(asset)} sx={{ fontSize: '8px', p: '1px 4px', height: '18px', textTransform: 'none', color: 'warning.main' }}>Restaurar</Button>
+                          <Button size="small" onClick={() => handleUnlinkAsset(asset.filename)} sx={{ fontSize: '8px', p: '1px 4px', height: '18px', textTransform: 'none', color: 'error.main' }}>Quitar</Button>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+            </Paper>
+
+            {/* INSPECTOR PRINCIPAL */}
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: '8px', border: '1px solid divider', bgcolor: 'background.paper', height: 'fit-content' }}>
               {rightSidebarTab === 0 ? (
                 <BlockEditor
                   selectedBlock={selectedBlock}
                   onUpdateBlockNode={handleUpdateNodeDOMProperties}
                   onDeleteBlockNode={handleDeleteNodeDOM}
-                  missingAssets={missingAssets}
+                  missingAssets={[]}
                   onResolveAsset={handleResolveAsset}
                 />
               ) : (
@@ -781,6 +1192,75 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
         <DialogActions>
           <Button onClick={() => setPasteModalOpen(false)} size="small" sx={{ textTransform: 'none' }}>Cancelar</Button>
           <Button onClick={handlePasteHTMLSubmit} size="small" variant="contained" sx={{ textTransform: 'none' }}>Importar Ahora</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* MODAL DETALLES DEL RECURSO (VER) */}
+      <Dialog open={!!viewAsset} onClose={() => setViewAsset(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontSize: '13.5px', fontWeight: 'bold' }}>Detalles del Recurso</DialogTitle>
+        {viewAsset && (
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, p: 2 }}>
+            {viewAsset.resolvedDataUrl && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 1, bgcolor: '#FAFAFA', borderRadius: '6px', border: '1px solid divider' }}>
+                <img src={viewAsset.resolvedDataUrl} alt="Vista previa" style={{ maxWidth: '100%', maxHeight: '120px', borderRadius: '4px' }} />
+              </Box>
+            )}
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Nombre de Archivo:</Typography>
+              <Typography variant="body2" sx={{ fontSize: '11px' }}>{viewAsset.filename}</Typography>
+
+              <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary', mt: 0.5 }}>Dimensiones:</Typography>
+              <Typography variant="body2" sx={{ fontSize: '11px' }}>{viewAssetMetadata?.dimensions || 'Desconocido'}</Typography>
+
+              <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary', mt: 0.5 }}>Tamaño Estimado:</Typography>
+              <Typography variant="body2" sx={{ fontSize: '11px' }}>{viewAssetMetadata?.size || 'Desconocido'}</Typography>
+
+              <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary', mt: 0.5 }}>Tipo de Archivo:</Typography>
+              <Typography variant="body2" sx={{ fontSize: '11px' }}>{viewAssetMetadata?.type || 'Imagen'}</Typography>
+
+              <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary', mt: 0.5 }}>Ruta Lógica Original:</Typography>
+              <Typography variant="body2" sx={{ fontSize: '11.5px', wordBreak: 'break-all', fontFamily: 'monospace' }}>assets/{viewAsset.filename}</Typography>
+            </Box>
+          </DialogContent>
+        )}
+        <DialogActions>
+          <Button onClick={() => setViewAsset(null)} size="small" variant="contained" sx={{ textTransform: 'none' }}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* DIALOG DE CONFIRMACIÓN PARA REEMPLAZAR MÚLTIPLES OCURRENCIAS */}
+      <Dialog open={replaceMultipleOpen} onClose={() => setReplaceMultipleOpen(false)} maxWidth="xs">
+        <DialogTitle sx={{ fontSize: '13.5px', fontWeight: 'bold' }}>Reemplazar Ocurrencias</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ fontSize: '11.5px', lineHeight: 1.4 }}>
+            Este recurso se utiliza en <strong>{replaceMultipleData?.occurrences}</strong> lugares de la firma HTML. ¿Deseas reemplazarlo en todas las apariciones o solo en la celda seleccionada?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ flexDirection: 'column', gap: 0.5, p: 2 }}>
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={() => applyAssetReplacement(replaceMultipleData!.filename, replaceMultipleData!.dataUrl, true)}
+            sx={{ textTransform: 'none', fontSize: '11px', fontWeight: 'bold' }}
+          >
+            Reemplazar en todas las apariciones
+          </Button>
+          <Button
+            fullWidth
+            variant="outlined"
+            onClick={() => applyAssetReplacement(replaceMultipleData!.filename, replaceMultipleData!.dataUrl, false)}
+            sx={{ textTransform: 'none', fontSize: '11px' }}
+          >
+            Reemplazar solo en el elemento seleccionado
+          </Button>
+          <Button
+            fullWidth
+            onClick={() => { setReplaceMultipleOpen(false); setReplaceMultipleData(null); }}
+            sx={{ textTransform: 'none', fontSize: '11px', color: 'text.secondary' }}
+          >
+            Cancelar
+          </Button>
         </DialogActions>
       </Dialog>
 
