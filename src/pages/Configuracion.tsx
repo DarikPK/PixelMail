@@ -268,6 +268,7 @@ const Configuracion = () => {
   // Firma visual / builder state
   const [rows, setRows] = useState<Row[]>([]);
   const [savingSig, setSavingSig] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   // Propiedades del bloque seleccionado
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
@@ -407,8 +408,21 @@ const Configuracion = () => {
 
   // Acciones Rápidas del Selector de Firma en el Editor
   const handleFastAction = async (action: string) => {
-    if (!editingSignature) return;
+    console.log("SIGNATURE CREATE CLICK", { action });
     try {
+      if (action === 'new') {
+        setNewSigName('Mi Firma Profesional');
+        setNewSigType('visual');
+        setCreateDialogOpen(true);
+        return;
+      }
+
+      // Otras acciones requieren que exista editingSignature
+      if (!editingSignature) {
+        console.warn("No hay firma seleccionada para la acción:", action);
+        return;
+      }
+
       if (action === 'active') {
         await activateSignature(editingSignatureId || null);
         showToast({
@@ -427,10 +441,6 @@ const Configuracion = () => {
         setRenameTargetId(editingSignatureId || '');
         setRenameValue(editingSignature.name);
         setRenameDialogOpen(true);
-      } else if (action === 'new') {
-        setNewSigName('');
-        setNewSigType('visual');
-        setCreateDialogOpen(true);
       }
     } catch (err: any) {
       showToast({
@@ -447,6 +457,10 @@ const Configuracion = () => {
       showToast({ message: 'El nombre es obligatorio.', severity: 'error' });
       return;
     }
+
+    console.log("SIGNATURE CREATE START", { name: newSigName, type: newSigType });
+    setIsCreating(true);
+
     try {
       const defaultHtml = `<table cellpadding="0" cellspacing="0" border="0" style="font-family: 'Inter', sans-serif;"><tr><td><strong>Nueva Firma</strong></td></tr></table>`;
       const defaultStructure = JSON.stringify([
@@ -469,19 +483,24 @@ const Configuracion = () => {
         newSigType === 'visual' ? defaultStructure : defaultHtml,
         0.8
       );
+
+      console.log("SIGNATURE CREATE SUCCESS", { newId });
       setEditingSignatureId(newId);
       setCreateDialogOpen(false);
       showToast({
-        message: 'Firma creada con éxito',
-        subtitle: `“${newSigName}” lista para edición.`,
+        message: 'Firma creada correctamente',
+        subtitle: `“${newSigName}” ya está lista para editar.`,
         severity: 'success'
       });
     } catch (err: any) {
+      console.error("SIGNATURE CREATE ERROR", err);
       showToast({
-        message: 'Error al crear firma',
+        message: 'No se pudo crear la firma',
         subtitle: err.message === 'DUPLICATE_NAME' ? 'Ya existe una firma con este nombre.' : err.message,
         severity: 'error'
       });
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -956,12 +975,14 @@ const Configuracion = () => {
                 No tienes ninguna firma seleccionada para editar.
               </Typography>
               <Button
+                type="button"
                 variant="contained"
                 onClick={() => handleFastAction('new')}
                 sx={{ mt: 2, textTransform: 'none' }}
-                startIcon={<AddIcon />}
+                disabled={isCreating}
+                startIcon={isCreating ? <CircularProgress size={14} color="inherit" /> : <AddIcon />}
               >
-                Crear firma
+                {isCreating ? 'Creando firma...' : 'Crear firma'}
               </Button>
             </Box>
           );
@@ -1996,7 +2017,7 @@ const Configuracion = () => {
       </Paper>
 
       {/* DIÁLOGO: CREAR NUEVA FIRMA */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)}>
+      <Dialog open={createDialogOpen} onClose={() => !isCreating && setCreateDialogOpen(false)}>
         <DialogTitle sx={{ fontWeight: 'bold', fontSize: '15px' }}>Nueva firma</DialogTitle>
         <DialogContent sx={{ minWidth: '320px', display: 'flex', flexDirection: 'column', gap: 2, pt: '10px !important' }}>
           <TextField
@@ -2006,8 +2027,9 @@ const Configuracion = () => {
             fullWidth
             value={newSigName}
             onChange={(e) => setNewSigName(e.target.value)}
+            disabled={isCreating}
           />
-          <FormControl size="small" fullWidth>
+          <FormControl size="small" fullWidth disabled={isCreating}>
             <InputLabel>Modo de firma</InputLabel>
             <Select
               value={newSigType}
@@ -2020,8 +2042,17 @@ const Configuracion = () => {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)} size="small">Cancelar</Button>
-          <Button onClick={handleCreateSignatureSubmit} variant="contained" size="small">Crear</Button>
+          <Button type="button" onClick={() => setCreateDialogOpen(false)} size="small" disabled={isCreating}>Cancelar</Button>
+          <Button
+            type="button"
+            onClick={handleCreateSignatureSubmit}
+            variant="contained"
+            size="small"
+            disabled={isCreating}
+            startIcon={isCreating ? <CircularProgress size={14} color="inherit" /> : null}
+          >
+            {isCreating ? 'Creando...' : 'Crear'}
+          </Button>
         </DialogActions>
       </Dialog>
 
