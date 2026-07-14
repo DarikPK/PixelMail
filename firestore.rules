@@ -1,21 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Regla para la colección de usuarios: solo el mismo usuario puede acceder a su perfil
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function signedIn() {
+      return request.auth != null;
     }
 
-    // Regla para la colección de configuración (settings): solo el mismo usuario puede leer/escribir su firma
-    match /settings/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Regla para la colección de correos (emails): solo el mismo usuario puede leer/escribir sus correos
-    match /emails/{docId} {
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    match /{document=**} {
+      allow read, write: if signedIn();
     }
   }
 }
