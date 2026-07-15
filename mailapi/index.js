@@ -175,6 +175,9 @@ exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) 
     })),
   });
 
+  // Registrar el HTML exacto recibido en el backend
+  logger.log("[CLOUD FUNCTION SENDEMAIL] HTML RECIBIDO:", html);
+
   // 5. Enviar usando Resend
   const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -185,7 +188,7 @@ exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) 
       from: "David Lachira <david.lachira@pixel.com.pe>",
       to: [to],
       subject: subject,
-      html: html.replace(/\n/g, '<br>'),
+      html: html, // Se envía el HTML intacto para no romper tablas ni insertar <br> entre tags
       reply_to: "david.lachira@pixel.com.pe",
     };
 
