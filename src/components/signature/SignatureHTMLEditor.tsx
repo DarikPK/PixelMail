@@ -66,13 +66,17 @@ import { generateHTMLFromStructure } from '../../pages/Configuracion';
 interface SignatureHTMLEditorProps {
   onSaveToFirebase?: (html: string, structureJSON: string) => Promise<void>;
   initialStructureJSON?: string;
+  initialHTML?: string;
   saving?: boolean;
+  initialName?: string;
 }
 
 export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
   onSaveToFirebase,
   initialStructureJSON,
-  saving = false
+  initialHTML,
+  saving = false,
+  initialName = 'Mi Firma Profesional'
 }) => {
   // HTML maestro original con IDs inyectados
   const [rawHTML, setRawHTML] = useState<string>('');
@@ -85,7 +89,13 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
   const [missingAssets, setMissingAssets] = useState<AssetRecord[]>([]);
 
   // Proyecto e Historial
-  const [projectName, setProjectName] = useState<string>('Mi Firma Profesional');
+  const [projectName, setProjectName] = useState<string>(initialName);
+
+  useEffect(() => {
+    if (initialName) {
+      setProjectName(initialName);
+    }
+  }, [initialName]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [savedProjects, setSavedProjects] = useState<SignatureProject[]>([]);
 
@@ -155,7 +165,19 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
 
   // Inicializar con firma de Firebase si existe
   useEffect(() => {
-    if (initialStructureJSON) {
+    if (initialHTML) {
+      try {
+        const enriched = injectSBIds(initialHTML);
+        setRawHTML(enriched);
+        const tree = buildDOMTree(enriched);
+        setBlocks(tree);
+        setMissingAssets(findMissingAssets(enriched));
+        setShowCatalog(false);
+        historyManagerRef.current.clear(tree);
+      } catch (e) {
+        console.error("Error al cargar HTML inicial de Firebase:", e);
+      }
+    } else if (initialStructureJSON) {
       try {
         const parsed = JSON.parse(initialStructureJSON);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -170,10 +192,10 @@ export const SignatureHTMLEditor: React.FC<SignatureHTMLEditorProps> = ({
           historyManagerRef.current.clear(tree);
         }
       } catch (e) {
-        console.error("Error al cargar firma inicial de Firebase:", e);
+        console.error("Error al cargar estructura inicial de Firebase:", e);
       }
     }
-  }, [initialStructureJSON]);
+  }, [initialStructureJSON, initialHTML]);
 
   // Guardar estado en el historial al realizar cambios
   const updateHTMLState = (newHTML: string) => {

@@ -54,6 +54,7 @@ const EmailViewer = ({
   return (
     <Box>
       <EmailActions
+        emailId={email.id}
         read={email.read}
         starred={email.starred}
         archived={email.archived}

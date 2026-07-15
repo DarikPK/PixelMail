@@ -3,21 +3,40 @@ import type { SignatureProject, SignatureBlock, AssetRecord } from './types';
 const STORAGE_KEY = 'pixelmail_signature_projects_dom';
 
 export class ProjectManager {
+  private static memoryProjects: SignatureProject[] = [];
+  private static hasMigratedFromStorage = false;
+
   /**
-   * Obtiene todos los proyectos guardados en localStorage
+   * Obtiene todos los proyectos. Intenta leer de localStorage una única vez,
+   * los carga en memoria para migración y limpia la clave para liberar espacio.
    */
   public static getAllProjects(): SignatureProject[] {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (!data) return [];
-    try {
-      return JSON.parse(data);
-    } catch (e) {
-      return [];
+    if (!this.hasMigratedFromStorage) {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (data) {
+        try {
+          const parsed = JSON.parse(data);
+          if (Array.isArray(parsed)) {
+            this.memoryProjects = parsed;
+            console.log("MIGRACIÓN: Se cargaron proyectos antiguos de localStorage a memoria.", parsed.length);
+          }
+        } catch (e) {
+          console.error("Error al leer datos antiguos de localStorage:", e);
+        } finally {
+          // Confirmar eliminación de la clave antigua
+          localStorage.removeItem(STORAGE_KEY);
+          this.hasMigratedFromStorage = true;
+          console.log("MIGRACIÓN: Se eliminó de localStorage la clave pesada pixelmail_signature_projects_dom.");
+        }
+      } else {
+        this.hasMigratedFromStorage = true;
+      }
     }
+    return this.memoryProjects;
   }
 
   /**
-   * Guarda un proyecto nuevo o existente en localStorage
+   * Guarda un proyecto únicamente en memoria para evitar QuotaExceededError en localStorage.
    */
   public static saveProject(
     name: string,
@@ -48,12 +67,13 @@ export class ProjectManager {
       projects.push(project);
     }
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    this.memoryProjects = projects;
+    console.log("Firma guardada en memoria del ProjectManager. ID:", id);
     return project;
   }
 
   /**
-   * Duplica un proyecto por su ID
+   * Duplica un proyecto en memoria
    */
   public static duplicateProject(id: string): SignatureProject | null {
     const projects = this.getAllProjects();
@@ -68,17 +88,16 @@ export class ProjectManager {
     };
 
     projects.push(duplicated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    this.memoryProjects = projects;
     return duplicated;
   }
 
   /**
-   * Elimina un proyecto de localStorage por su ID
+   * Elimina un proyecto en memoria
    */
   public static deleteProject(id: string): void {
     const projects = this.getAllProjects();
-    const filtered = projects.filter(p => p.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+    this.memoryProjects = projects.filter(p => p.id !== id);
   }
 
   /**

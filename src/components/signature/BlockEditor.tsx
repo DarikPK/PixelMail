@@ -10,15 +10,22 @@ import {
   MenuItem,
   Button,
   Card,
-  CardContent
+  CardContent,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress
 } from '@mui/material';
 import {
   PhotoCamera as PhotoCameraIcon,
   Link as LinkIcon,
   Warning as WarningIcon,
-  Upload as UploadIcon
+  Upload as UploadIcon,
+  CheckCircle as SuccessIcon
 } from '@mui/icons-material';
 import type { SignatureBlock, AssetRecord } from './types';
+import { optimizeImage, type OptimizationResult } from '../../utils/imageOptimizer';
 
 const PREDEFINED_COLORS = [
   '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#1E293B', '#64748B', '#FFFFFF'
@@ -45,7 +52,12 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 }) => {
   const [recentColors, setRecentColors] = useState<string[]>(['#3B82F6', '#1E293B', '#10B981', '#F59E0B']);
 
-  // Obtener el valor actual de un estilo inline o atributo defensivamente
+  // Estados para optimización de imagen
+  const [optResult, setOptResult] = useState<OptimizationResult | null>(null);
+  const [optModalOpen, setOptModalOpen] = useState(false);
+  const [isProcessing, setIsCreating] = useState(false);
+  const [targetAssetFilename, setTargetAssetFilename] = useState<string | null>(null);
+
   const getStyle = (key: string): string => {
     return selectedBlock?.inlineStyles?.[key] || '';
   };
@@ -66,27 +78,54 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     onUpdateBlockNode({ attributes: nextAttrs });
   };
 
-  // Conversión de archivo local a Base64 para imágenes de la firma o activos faltantes
-  const handleLocalImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isAssetFilename?: string) => {
+  // Conversión y OPTIMIZACIÓN de archivo local
+  const handleLocalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isAssetFilename?: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert('La imagen es demasiado grande (máximo 2MB).');
+    // Aumentado el límite defensivamente a 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      alert('La imagen supera los 10MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      if (isAssetFilename) {
-        onResolveAsset(isAssetFilename, base64);
-        alert(`¡Recurso "${isAssetFilename}" resuelto con éxito!`);
-      } else {
-        handleAttrChange('src', base64);
-      }
-    };
-    reader.readAsDataURL(file);
+    setIsCreating(true);
+    setTargetAssetFilename(isAssetFilename || null);
+
+    // Auto-detectar categoría basándose en nombre o tipo de bloque
+    let category: 'logo' | 'qr' | 'foto' | 'banner' = 'foto';
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.includes('logo')) category = 'logo';
+    else if (lowerName.includes('qr')) category = 'qr';
+    else if (lowerName.includes('banner')) category = 'banner';
+
+    try {
+      console.log("SIGNATURE CREATE START", { fileName: file.name, category });
+      const result = await optimizeImage(file, file.name, category);
+      console.log("SIGNATURE CREATE SUCCESS", { result });
+
+      setOptResult(result);
+      setOptModalOpen(true);
+    } catch (err) {
+      console.error("SIGNATURE CREATE ERROR", err);
+      alert('Error al procesar y optimizar la imagen.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleConfirmOptimization = () => {
+    if (!optResult) return;
+
+    const finalDataUrl = optResult.optimizedDataUrl;
+    if (targetAssetFilename) {
+      onResolveAsset(targetAssetFilename, finalDataUrl);
+    } else {
+      handleAttrChange('src', finalDataUrl);
+    }
+
+    setOptModalOpen(false);
+    setOptResult(null);
   };
 
   const handleColorUpdate = (color: string) => {
@@ -96,10 +135,71 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     }
   };
 
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
-      {/* SECCIÓN RECURSOS FALTANTES (Urgente solicitado por el usuario) */}
+      {/* MODAL DE COMPARACIÓN DE OPTIMIZACIÓN */}
+      <Dialog open={optModalOpen} onClose={() => setOptModalOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold', fontSize: '15px', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <SuccessIcon color="success" /> Imagen Optimizada Automáticamente
+        </DialogTitle>
+        {optResult && (
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '10px !important' }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+              <Card variant="outlined" sx={{ p: 1.5, textAlign: 'center', bgcolor: 'action.hover' }}>
+                <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>IMAGEN ORIGINAL</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '15px', mt: 1, color: 'error.main' }}>
+                  {formatBytes(optResult.originalSize)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  Resolución: {optResult.originalWidth}x{optResult.originalHeight} px
+                </Typography>
+              </Card>
+
+              <Card variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderColor: '#10B981', bgcolor: 'rgba(16,185,129,0.04)' }}>
+                <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#10B981' }}>IMAGEN OPTIMIZADA</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '15px', mt: 1, color: '#10B981' }}>
+                  {formatBytes(optResult.optimizedSize)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  Resolución: {optResult.optimizedWidth}x{optResult.optimizedHeight} px
+                </Typography>
+              </Card>
+            </Box>
+
+            <Box sx={{ p: 1.5, bgcolor: '#1E293B', color: '#FFFFFF', borderRadius: '8px', textAlign: 'center' }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                ¡Ahorro de espacio del {optResult.ratio}%!
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.85 }}>
+                Formato: {optResult.format} | Tipo: {optResult.category.toUpperCase()}
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 1, border: '1px solid divider', borderRadius: '6px', bgcolor: '#FAFAFA' }}>
+              <img
+                src={optResult.optimizedDataUrl}
+                alt="Optimized preview"
+                style={{ maxWidth: '100%', maxHeight: '150px', borderRadius: '4px', objectFit: 'contain' }}
+              />
+            </Box>
+          </DialogContent>
+        )}
+        <DialogActions>
+          <Button onClick={() => setOptModalOpen(false)} size="small">Cancelar</Button>
+          <Button onClick={handleConfirmOptimization} variant="contained" color="success" size="small">Insertar imagen optimizada</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* SECCIÓN RECURSOS FALTANTES */}
       {missingAssets.length > 0 && (
         <Card variant="outlined" sx={{ borderColor: 'warning.main', bgcolor: 'rgba(245,158,11,0.04)', mb: 1 }}>
           <CardContent sx={{ p: '10px 12px !important' }}>
@@ -107,7 +207,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               <WarningIcon sx={{ fontSize: '15px' }} /> RECURSOS FALTANTES DETECTADOS
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontSize: '9.5px', lineHeight: 1.3 }}>
-              Se detectaron imágenes con rutas locales/relativas. Cárgalas desde tu computadora para incorporarlas en Base64:
+              Se detectaron imágenes con rutas locales/relativas. Cárgalas desde tu computadora para incorporarlas de forma optimizada:
             </Typography>
 
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -126,10 +226,11 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                       variant="outlined"
                       size="small"
                       component="label"
-                      startIcon={<UploadIcon sx={{ fontSize: '11px' }} />}
+                      disabled={isProcessing}
+                      startIcon={isProcessing ? <CircularProgress size={10} color="inherit" /> : <UploadIcon sx={{ fontSize: '11px' }} />}
                       sx={{ fontSize: '8.5px', p: '1px 6px', textTransform: 'none', height: '20px' }}
                     >
-                      Cargar
+                      {isProcessing ? 'Procesando...' : 'Cargar'}
                       <input type="file" accept="image/*" onChange={(e) => handleLocalImageUpload(e, asset.filename)} style={{ display: 'none' }} />
                     </Button>
                   )}
@@ -207,10 +308,11 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   variant="outlined"
                   size="small"
                   component="label"
-                  startIcon={<PhotoCameraIcon />}
+                  disabled={isProcessing}
+                  startIcon={isProcessing ? <CircularProgress size={12} color="inherit" /> : <PhotoCameraIcon />}
                   sx={{ fontSize: '9px', textTransform: 'none', py: 0.5 }}
                 >
-                  Cargar Imagen
+                  {isProcessing ? 'Procesando...' : 'Cargar Imagen'}
                   <input type="file" accept="image/*" onChange={(e) => handleLocalImageUpload(e)} style={{ display: 'none' }} />
                 </Button>
 
@@ -398,7 +500,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               <TextField
                 label="Fondo (bgcolor)"
                 size="small"
-                value={getStyle('background-color') || getAttr('bgcolor')}
+                value={getStyle('background-color') || getAttr('background-color')}
                 placeholder="Ej. #F8FAFC"
                 onChange={(e) => handleStyleChange('background-color', e.target.value)}
                 slotProps={{ input: { sx: { fontSize: '11px' } } }}

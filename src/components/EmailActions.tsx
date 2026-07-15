@@ -13,8 +13,10 @@ import {
   RestoreFromTrash,
   DeleteForever
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 
 interface EmailActionsProps {
+  emailId?: string;
   read: boolean;
   starred: boolean;
   archived: boolean;
@@ -28,6 +30,7 @@ interface EmailActionsProps {
 }
 
 const EmailActions = ({
+  emailId,
   read,
   starred,
   archived,
@@ -39,6 +42,7 @@ const EmailActions = ({
   onToggleDelete,
   onDeleteForever
 }: EmailActionsProps) => {
+  const navigate = useNavigate();
   return (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, pb: 2, mb: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -54,18 +58,33 @@ const EmailActions = ({
         <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
         {/* Acciones de correo ficticias pero visuales (Responder, Responder a todos, Reenviar) */}
-        <Tooltip title="Responder (Próximamente)">
-          <Button startIcon={<Reply />} size="small" disabled sx={{ textTransform: 'none' }}>
+        <Tooltip title="Responder a este correo">
+          <Button
+            startIcon={<Reply />}
+            size="small"
+            onClick={() => emailId && navigate(`/redactar?replyTo=${emailId}`)}
+            sx={{ textTransform: 'none' }}
+          >
             Responder
           </Button>
         </Tooltip>
-        <Tooltip title="Responder a todos (Próximamente)">
-          <Button startIcon={<ReplyAll />} size="small" disabled sx={{ textTransform: 'none', display: { xs: 'none', sm: 'inline-flex' } }}>
+        <Tooltip title="Responder a todos">
+          <Button
+            startIcon={<ReplyAll />}
+            size="small"
+            onClick={() => emailId && navigate(`/redactar?replyTo=${emailId}`)}
+            sx={{ textTransform: 'none', display: { xs: 'none', sm: 'inline-flex' } }}
+          >
             Responder a todos
           </Button>
         </Tooltip>
-        <Tooltip title="Reenviar (Próximamente)">
-          <Button startIcon={<Forward />} size="small" disabled sx={{ textTransform: 'none' }}>
+        <Tooltip title="Reenviar este correo">
+          <Button
+            startIcon={<Forward />}
+            size="small"
+            onClick={() => emailId && navigate(`/redactar?forward=${emailId}`)}
+            sx={{ textTransform: 'none' }}
+          >
             Reenviar
           </Button>
         </Tooltip>
