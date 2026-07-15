@@ -100,17 +100,18 @@ interface Row {
   columns: Column[];
 }
 
-// Compilador de Estructura de Firma JSON a Tabla HTML inline
+// Compilador de Estructura de Firma JSON a Tabla HTML inline (Optimizado para evitar deformaciones en Gmail/Outlook)
 export const generateHTMLFromStructure = (rows: Row[]): string => {
-  let html = `<table cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px; font-family: 'Inter', system-ui, sans-serif; border-collapse: collapse;">`;
+  let html = `<table cellpadding="0" cellspacing="0" border="0" width="600" style="width: 600px; max-width: 600px; table-layout: fixed; font-family: 'Inter', system-ui, sans-serif; border-collapse: collapse;">`;
 
   (rows ?? []).forEach((row) => {
     if (!row) return;
-    html += `<tr><td style="padding: 0;"><table cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-collapse: collapse;"><tr>`;
+    html += `<tr><td style="padding: 0;"><table cellpadding="0" cellspacing="0" border="0" width="600" style="width: 600px; max-width: 600px; table-layout: fixed; border-collapse: collapse;"><tr>`;
 
     (row.columns ?? []).forEach((col) => {
       if (!col) return;
-      html += `<td valign="top" style="width: ${col.widthPercent}%; padding: 8px; box-sizing: border-box;">`;
+      const colWidthPx = Math.round(600 * ((col.widthPercent || 100) / 100));
+      html += `<td valign="top" width="${colWidthPx}" style="width: ${colWidthPx}px; max-width: ${colWidthPx}px; padding: 8px; box-sizing: border-box; table-layout: fixed; vertical-align: top; word-break: normal; overflow-wrap: normal; hyphens: none;">`;
 
       (col.blocks ?? []).forEach((block) => {
         if (!block) return;
@@ -122,13 +123,13 @@ export const generateHTMLFromStructure = (rows: Row[]): string => {
 
         switch (block.type) {
           case 'name':
-            html += `<div style="font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '22px'}; font-weight: ${block.fontWeight || '700'}; color: ${block.color || '#1E293B'};">${block.content}</div>`;
+            html += `<div style="font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '22px'}; font-weight: ${block.fontWeight || '700'}; color: ${block.color || '#1E293B'}; word-break: normal; overflow-wrap: normal; hyphens: none; white-space: normal;">${block.content}</div>`;
             break;
           case 'cargo':
-            html += `<div style="font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '15px'}; font-weight: ${block.fontWeight || '500'}; color: ${block.color || '#64748B'};">${block.content}</div>`;
+            html += `<div style="font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '15px'}; font-weight: ${block.fontWeight || '500'}; color: ${block.color || '#64748B'}; word-break: normal; overflow-wrap: normal; hyphens: none; white-space: normal;">${block.content}</div>`;
             break;
           case 'text':
-            html += `<div style="font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '13px'}; font-weight: ${block.fontWeight || '400'}; color: ${block.color || '#475569'};">${block.content}</div>`;
+            html += `<div style="font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '13px'}; font-weight: ${block.fontWeight || '400'}; color: ${block.color || '#475569'}; word-break: normal; overflow-wrap: normal; hyphens: none; white-space: normal;">${block.content}</div>`;
             break;
           case 'link':
             html += `<a href="${block.href || '#'}" style="font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '13px'}; color: ${block.color || '#3B82F6'}; text-decoration: none; font-weight: ${block.fontWeight || '500'};">${block.content}</a>`;

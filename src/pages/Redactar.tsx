@@ -72,6 +72,24 @@ const setOrReplaceSignatureInHTML = (html: string, signatureId: string, signatur
   return doc.body.innerHTML;
 };
 
+const logHTMLStructure = (html: string, phase: string) => {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const tables = doc.querySelectorAll('table');
+  const tds = doc.querySelectorAll('td');
+
+  console.log(`[HTML DIAGNOSTIC - ${phase}]`);
+  console.log("Ancho de la tabla principal:", tables[0]?.getAttribute('width') || 'Sin width');
+  console.log("Cantidad de tablas:", tables.length);
+  console.log("Cantidad de td:", tds.length);
+
+  tds.forEach((td, idx) => {
+    console.log(`td #${idx + 1}: width attribute = "${td.getAttribute('width')}", style = "${td.getAttribute('style')}"`);
+  });
+
+  console.log(`Peso del HTML (${phase}):`, new Blob([html]).size, "bytes");
+};
+
 const Redactar = () => {
   const { user } = useAuth();
   const { emails } = useEmails();
@@ -297,6 +315,9 @@ const Redactar = () => {
       return;
     }
 
+    // Registrar el estado del HTML antes de reemplazar imágenes
+    logHTMLStructure(message, "ANTES de reemplazar imágenes");
+
     // Antes de insertar/enviar, verificar recursos de la firma actual
     if (insertedSignatureId) {
       const currentSig = signatures.find(s => s.id === insertedSignatureId);
@@ -335,6 +356,9 @@ const Redactar = () => {
     }
 
     const finalHtml = addSignature ? `${bodyHtml}<br><br>${signatureHtml}` : bodyHtml;
+
+    // Registrar el estado del HTML después de reemplazar imágenes
+    logHTMLStructure(finalHtml, "DESPUÉS de reemplazar imágenes");
 
     // LOGS OBLIGATORIOS REQUERIDOS
     console.log("SIGNATURE SELECTED", selectedSignature);
