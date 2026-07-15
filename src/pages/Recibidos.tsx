@@ -149,7 +149,6 @@ const Recibidos = () => {
   const [emptying, setEmptying] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const folderParam = searchParams.get('folder');
   const openParam = searchParams.get('open');
 
   // Menús de barra de acciones
@@ -273,7 +272,12 @@ const Recibidos = () => {
   };
 
   const handleOpenEmail = async (email: EmailData) => {
-    setSelectedEmailId(email.id);
+    // Al abrir un correo, actualizamos los parámetros de búsqueda de la URL
+    // conservando el resto de parámetros (tab, folder, filtros, búsqueda, etc.)
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('open', email.id);
+    setSearchParams(newParams);
+
     if (!email.read) {
       try {
         await updateDoc(doc(db, 'emails', email.id), {
@@ -397,12 +401,11 @@ const Recibidos = () => {
       <EmailViewer
         email={emailToShow}
         onBack={() => {
-          // Si abrimos desde un folder, conservar los query params
-          if (folderParam) {
-            setSearchParams({ folder: folderParam });
-          } else {
-            setSearchParams({});
-          }
+          // Remover únicamente el parámetro 'open' conservando todos los demás parámetros
+          // (tab, folder, filtros, búsquedas, paginaciones, etc.)
+          const newParams = new URLSearchParams(searchParams);
+          newParams.delete('open');
+          setSearchParams(newParams);
         }}
         onToggleRead={async () => {
           try {
