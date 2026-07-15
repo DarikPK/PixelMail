@@ -100,54 +100,83 @@ interface Row {
   columns: Column[];
 }
 
+export const PHONE_ICON_URL = 'https://firebasestorage.googleapis.com/v0/b/pixel-mail-a78f6.firebasestorage.app/o/public%2Fsignatures%2Fresources%2Fphone.png?alt=media';
+export const EMAIL_ICON_URL = 'https://firebasestorage.googleapis.com/v0/b/pixel-mail-a78f6.firebasestorage.app/o/public%2Fsignatures%2Fresources%2Femail.png?alt=media';
+export const WEB_ICON_URL = 'https://firebasestorage.googleapis.com/v0/b/pixel-mail-a78f6.firebasestorage.app/o/public%2Fsignatures%2Fresources%2Fweb.png?alt=media';
+export const WHATSAPP_ICON_URL = 'https://firebasestorage.googleapis.com/v0/b/pixel-mail-a78f6.firebasestorage.app/o/public%2Fsignatures%2Fresources%2Fwhatsapp.png?alt=media';
+export const CALENDAR_ICON_URL = 'https://firebasestorage.googleapis.com/v0/b/pixel-mail-a78f6.firebasestorage.app/o/public%2Fsignatures%2Fresources%2Fcalendar.png?alt=media';
+
 // Compilador de Estructura de Firma JSON a Tabla HTML inline (Optimizado para evitar deformaciones en Gmail/Outlook)
 export const generateHTMLFromStructure = (rows: Row[]): string => {
-  let html = `<table cellpadding="0" cellspacing="0" border="0" width="600" style="width: 600px; max-width: 600px; table-layout: fixed; font-family: 'Inter', system-ui, sans-serif; border-collapse: collapse;">`;
+  let html = `<table cellpadding="0" cellspacing="0" border="0" width="560" style="width: 560px; max-width: 560px; table-layout: fixed; font-family: Arial, Helvetica, sans-serif; border-collapse: collapse;">`;
 
   (rows ?? []).forEach((row) => {
     if (!row) return;
-    html += `<tr><td style="padding: 0;"><table cellpadding="0" cellspacing="0" border="0" width="600" style="width: 600px; max-width: 600px; table-layout: fixed; border-collapse: collapse;"><tr>`;
+    html += `<tr><td style="padding: 0;"><table cellpadding="0" cellspacing="0" border="0" width="560" style="width: 560px; max-width: 560px; table-layout: fixed; border-collapse: collapse;"><tr>`;
 
     (row.columns ?? []).forEach((col) => {
       if (!col) return;
-      const colWidthPx = Math.round(600 * ((col.widthPercent || 100) / 100));
-      html += `<td valign="top" width="${colWidthPx}" style="width: ${colWidthPx}px; max-width: ${colWidthPx}px; padding: 8px; box-sizing: border-box; table-layout: fixed; vertical-align: top; word-break: normal; overflow-wrap: normal; hyphens: none;">`;
+      // logo: 135 px, info: 255 px, qr: 140 px, separaciones: 30 px
+      let colWidthPx = 255;
+      if (col.widthPercent === 24) colWidthPx = 135;
+      else if (col.widthPercent === 30) colWidthPx = 140;
+      else if (col.widthPercent === 46) colWidthPx = 255;
+      else {
+        colWidthPx = Math.round(560 * ((col.widthPercent || 100) / 100));
+      }
+
+      html += `<td valign="top" width="${colWidthPx}" style="width: ${colWidthPx}px; max-width: ${colWidthPx}px; padding: 6px; box-sizing: border-box; table-layout: fixed; vertical-align: top; word-break: normal; overflow-wrap: normal; hyphens: none;">`;
 
       (col.blocks ?? []).forEach((block) => {
         if (!block) return;
         const alignStyle = block.align ? `text-align: ${block.align};` : '';
-        const paddingStyle = block.padding ? `padding: ${block.padding};` : 'padding: 4px 0;';
+        const paddingStyle = block.padding ? `padding: ${block.padding};` : 'padding: 2px 0;';
         const marginStyle = block.margin ? `margin: ${block.margin};` : '';
 
         html += `<div style="${alignStyle} ${paddingStyle} ${marginStyle}">`;
 
+        let cleanContent = (block.content || '').replace(/[📱☎✉🌐🛡🛡◎●◉▣]/g, '').trim();
+
         switch (block.type) {
           case 'name':
-            html += `<div style="font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '22px'}; font-weight: ${block.fontWeight || '700'}; color: ${block.color || '#1E293B'}; word-break: normal; overflow-wrap: normal; hyphens: none; white-space: normal;">${block.content}</div>`;
+            html += `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 700; color: #1E293B; word-break: normal; overflow-wrap: normal; hyphens: none; white-space: normal; line-height: 1.2;">${cleanContent}</div>`;
             break;
           case 'cargo':
-            html += `<div style="font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '15px'}; font-weight: ${block.fontWeight || '500'}; color: ${block.color || '#64748B'}; word-break: normal; overflow-wrap: normal; hyphens: none; white-space: normal;">${block.content}</div>`;
+            html += `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 12px; font-weight: 500; color: #64748B; word-break: normal; overflow-wrap: normal; hyphens: none; white-space: normal; line-height: 1.2;">${cleanContent}</div>`;
             break;
           case 'text':
-            html += `<div style="font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '13px'}; font-weight: ${block.fontWeight || '400'}; color: ${block.color || '#475569'}; word-break: normal; overflow-wrap: normal; hyphens: none; white-space: normal;">${block.content}</div>`;
+            html += `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: 400; color: #475569; word-break: normal; overflow-wrap: normal; hyphens: none; white-space: normal; line-height: 1.2;">${cleanContent}</div>`;
             break;
-          case 'link':
-            html += `<a href="${block.href || '#'}" style="font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '13px'}; color: ${block.color || '#3B82F6'}; text-decoration: none; font-weight: ${block.fontWeight || '500'};">${block.content}</a>`;
+          case 'link': {
+            let iconTag = '';
+            if (block.id === 'b-tel') {
+              iconTag = `<img src="${PHONE_ICON_URL}" width="14" height="14" style="vertical-align: middle; margin-right: 6px; width: 14px; height: 14px; display: inline-block;" valign="middle">`;
+            } else if (block.id === 'b-email') {
+              iconTag = `<img src="${EMAIL_ICON_URL}" width="14" height="14" style="vertical-align: middle; margin-right: 6px; width: 14px; height: 14px; display: inline-block;" valign="middle">`;
+            } else if (block.id === 'b-web') {
+              iconTag = `<img src="${WEB_ICON_URL}" width="14" height="14" style="vertical-align: middle; margin-right: 6px; width: 14px; height: 14px; display: inline-block;" valign="middle">`;
+            } else if (block.id === 'b-link-wa') {
+              iconTag = `<img src="${WHATSAPP_ICON_URL}" width="14" height="14" style="vertical-align: middle; margin-right: 6px; width: 14px; height: 14px; display: inline-block;" valign="middle">`;
+            } else if (block.id === 'b-link-meet') {
+              iconTag = `<img src="${CALENDAR_ICON_URL}" width="14" height="14" style="vertical-align: middle; margin-right: 6px; width: 14px; height: 14px; display: inline-block;" valign="middle">`;
+            }
+            html += `<a href="${block.href || '#'}" style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: ${block.color || '#3B82F6'}; text-decoration: none; font-weight: 500; display: inline-block; vertical-align: middle; line-height: 14px;">${iconTag}${cleanContent}</a>`;
             break;
+          }
           case 'button':
-            html += `<a href="${block.href || '#'}" style="display: inline-block; background-color: ${block.buttonColor || '#3B82F6'}; color: #FFFFFF; font-family: ${block.fontFamily || 'Inter'}, sans-serif; font-size: ${block.fontSize || '13px'}; font-weight: 600; text-decoration: none; padding: 8px 16px; border-radius: ${block.borderRadius || '6px'}; border: ${block.border || 'none'}; text-align: center;">${block.content}</a>`;
+            html += `<a href="${block.href || '#'}" style="display: inline-block; background-color: ${block.buttonColor || '#3B82F6'}; color: #FFFFFF; font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: 600; text-decoration: none; padding: 4px 8px; border-radius: 4px; text-align: center;">${cleanContent}</a>`;
             break;
           case 'separator':
             html += `<div style="border-top: 1px solid ${block.color || '#CBD5E1'}; height: 1px; width: 100%;"></div>`;
             break;
           case 'espaciador':
-            html += `<div style="height: ${block.height || '12px'};"></div>`;
+            html += `<div style="height: ${block.height || '6px'};"></div>`;
             break;
           case 'gif':
-            html += `<div style="border: 2px dashed #3B82F6; padding: 12px; text-align: center; border-radius: 6px; font-size: 11px; color: #3B82F6; font-weight: bold; background-color: rgba(59,130,246,0.05);">${block.content}</div>`;
+            html += `<div style="border: 1px dashed #3B82F6; padding: 6px; text-align: center; border-radius: 4px; font-size: 10px; color: #3B82F6; font-weight: bold; background-color: rgba(59,130,246,0.02);">${cleanContent}</div>`;
             break;
           case 'qr':
-            html += `<div style="border: 2px dashed #10B981; padding: 12px; text-align: center; border-radius: 6px; font-size: 11px; color: #10B981; font-weight: bold; background-color: rgba(16,185,129,0.05);">${block.content}</div>`;
+            html += `<div style="border: 1px dashed #10B981; padding: 6px; text-align: center; border-radius: 4px; font-size: 10px; color: #10B981; font-weight: bold; background-color: rgba(16,185,129,0.02);">${cleanContent}</div>`;
             break;
           default:
             break;
@@ -172,72 +201,35 @@ const getDavidSignatureTemplate = (): Row[] => [
     columns: [
       {
         id: 'col-1-1',
-        widthPercent: 22,
+        widthPercent: 24, // logo: 135 px / 560 px
         blocks: [
-          { id: 'b-gif-1', type: 'gif', content: 'Aquí irá el GIF del logo Pixel' },
-          { id: 'b-sep-1', type: 'separator', content: '', color: '#3B82F6' }
+          { id: 'b-gif-1', type: 'gif', content: 'Aquí irá el logo Pixel' }
         ]
       },
       {
         id: 'col-1-2',
-        widthPercent: 56,
+        widthPercent: 46, // info: 255 px / 560 px
         blocks: [
-          { id: 'b-name', type: 'name', content: 'David Lachira S.', fontFamily: 'Inter', fontSize: '22px', fontWeight: '700', color: '#1E293B' },
-          { id: 'b-cargo', type: 'cargo', content: 'Asesor de Negocios', fontFamily: 'Inter', fontSize: '15px', fontWeight: '500', color: '#64748B' },
-          { id: 'b-space-1', type: 'espaciador', content: '', height: '8px' },
-          { id: 'b-tel', type: 'link', content: '📱 +51 930 653 718', href: 'tel:+51930653718', color: '#3B82F6' },
+          { id: 'b-name', type: 'name', content: 'David Lachira S.', fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '16px', fontWeight: '700', color: '#1E293B' },
+          { id: 'b-cargo', type: 'cargo', content: 'Asesor de Negocios', fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px', fontWeight: '500', color: '#64748B' },
+          { id: 'b-space-1', type: 'espaciador', content: '', height: '6px' },
+          { id: 'b-tel', type: 'link', content: '+51 930 653 718', href: 'tel:+51930653718', color: '#3B82F6' },
           { id: 'b-space-tel', type: 'espaciador', content: '', height: '4px' },
-          { id: 'b-email', type: 'link', content: '✉ david.lachira@pixel.com.pe', href: 'mailto:david.lachira@pixel.com.pe', color: '#3B82F6' },
+          { id: 'b-email', type: 'link', content: 'david.lachira@pixel.com.pe', href: 'mailto:david.lachira@pixel.com.pe', color: '#3B82F6' },
           { id: 'b-space-email', type: 'espaciador', content: '', height: '4px' },
-          { id: 'b-web', type: 'link', content: '🌐 pixel.com.pe', href: 'https://pixel.com.pe', color: '#3B82F6' },
-          { id: 'b-space-2', type: 'espaciador', content: '', height: '8px' },
-          { id: 'b-frase', type: 'text', content: 'Impulsamos el crecimiento de tu empresa con soluciones financieras.', fontFamily: 'Inter', fontSize: '13px', color: '#64748B' }
+          { id: 'b-web', type: 'link', content: 'pixel.com.pe', href: 'https://pixel.com.pe', color: '#3B82F6' },
+          { id: 'b-space-links', type: 'espaciador', content: '', height: '8px' },
+          { id: 'b-link-wa', type: 'link', content: 'WhatsApp', href: 'https://wa.me/51930653718', color: '#10B981' },
+          { id: 'b-space-wa', type: 'espaciador', content: '', height: '4px' },
+          { id: 'b-link-meet', type: 'link', content: 'Agendar reunión', href: '#', color: '#3B82F6' }
         ]
       },
       {
         id: 'col-1-3',
-        widthPercent: 22,
+        widthPercent: 30, // QR: 140 px / 560 px (paddings y separaciones = 560 px total)
         blocks: [
           { id: 'b-qr', type: 'qr', content: 'Aquí irá el QR' },
-          { id: 'b-text-qr', type: 'text', content: 'Escanéame', align: 'center', color: '#64748B' }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'row-2',
-    columns: [
-      {
-        id: 'col-2-1',
-        widthPercent: 33,
-        blocks: [
-          { id: 'b-btn-wa', type: 'button', content: 'WhatsApp', buttonColor: '#22C55E', href: '#', borderRadius: '4px' }
-        ]
-      },
-      {
-        id: 'col-2-2',
-        widthPercent: 34,
-        blocks: [
-          { id: 'b-btn-meet', type: 'button', content: 'Agendar reunión', buttonColor: '#3B82F6', href: '#', borderRadius: '4px' }
-        ]
-      },
-      {
-        id: 'col-2-3',
-        widthPercent: 33,
-        blocks: [
-          { id: 'b-btn-web', type: 'button', content: 'Visitar sitio web', buttonColor: '#1E293B', href: 'https://pixel.com.pe', borderRadius: '4px' }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'row-3',
-    columns: [
-      {
-        id: 'col-3-1',
-        widthPercent: 100,
-        blocks: [
-          { id: 'b-disclaimer', type: 'text', content: 'Este mensaje y sus anexos contienen información confidencial dirigida exclusivamente al destinatario.', fontSize: '11px', color: '#64748B' }
+          { id: 'b-text-qr', type: 'text', content: 'Escríbeme por WhatsApp', align: 'center', color: '#64748B', fontSize: '11px' }
         ]
       }
     ]

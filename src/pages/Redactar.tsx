@@ -90,6 +90,25 @@ const logHTMLStructure = (html: string, phase: string) => {
   console.log(`Peso del HTML (${phase}):`, new Blob([html]).size, "bytes");
 };
 
+const cleanHTMLOfEmptyBRs = (html: string): string => {
+  if (!html) return html;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  // Encontrar y remover <br> que estén directamente dentro de table, tbody, tr
+  const tableParents = doc.querySelectorAll('table, tbody, tr');
+  tableParents.forEach((parent) => {
+    const children = Array.from(parent.childNodes);
+    children.forEach((child) => {
+      if (child.nodeName.toLowerCase() === 'br') {
+        child.remove();
+      }
+    });
+  });
+
+  return doc.body.innerHTML;
+};
+
 const Redactar = () => {
   const { user } = useAuth();
   const { emails } = useEmails();
@@ -355,7 +374,8 @@ const Redactar = () => {
       }
     }
 
-    const finalHtml = addSignature ? `${bodyHtml}<br><br>${signatureHtml}` : bodyHtml;
+    let finalHtml = addSignature ? `${bodyHtml}<br><br>${signatureHtml}` : bodyHtml;
+    finalHtml = cleanHTMLOfEmptyBRs(finalHtml);
 
     // Registrar el estado del HTML después de reemplazar imágenes
     logHTMLStructure(finalHtml, "DESPUÉS de reemplazar imágenes");
