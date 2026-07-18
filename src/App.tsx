@@ -12,6 +12,7 @@ import Redactar from './pages/Redactar';
 import Enviados from './pages/Enviados';
 import Configuracion from './pages/Configuracion';
 import Recibidos from './pages/Recibidos';
+import ReloadPrompt from './components/ReloadPrompt';
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Router>
+              <ReloadPrompt />
             </SignatureProvider>
           </EmailProvider>
         </AuthProvider>

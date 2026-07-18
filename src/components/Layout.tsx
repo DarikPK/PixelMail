@@ -56,7 +56,10 @@ import {
   Attachment as AttachIcon,
   DeleteForever as DeleteForeverIcon,
   Close as CloseIcon,
-  OpenInNew as OpenIcon
+  OpenInNew as OpenIcon,
+  CloudOff as CloudOffIcon,
+  GetApp as GetAppIcon,
+  IosShare as IosShareIcon
 } from '@mui/icons-material';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
@@ -80,6 +83,68 @@ function formatBytes(bytes: number): string {
 const Layout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorOpen] = useState<null | HTMLElement>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [iosInstallDialogOpen, setIosInstallDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Detectar iOS
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+    setIsIOS(isIosDevice);
+
+    // Si es iOS, mostramos instrucciones si no está en standalone
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    const isDismissed = sessionStorage.getItem('pixelmail_install_dismissed') === 'true';
+
+    if (isIosDevice && !isStandalone && !isDismissed) {
+      setShowInstallBtn(true);
+    }
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      if (!isStandalone && !isDismissed) {
+        setShowInstallBtn(true);
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt as any);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt as any);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (isIOS) {
+      setIosInstallDialogOpen(true);
+      return;
+    }
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`[PWA INSTALL] El usuario eligió: ${outcome}`);
+    setDeferredPrompt(null);
+    setShowInstallBtn(false);
+  };
+
+  const handleDismissInstall = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    sessionStorage.setItem('pixelmail_install_dismissed', 'true');
+    setShowInstallBtn(false);
+  };
+
   const { user, logout, loading: authLoading } = useAuth();
   const { mode, toggleTheme } = useCustomTheme();
   const { emails, folders, counts, activeNav, activeFolderId, setActiveNav, setActiveFolderId, storageBreakdown } = useEmails();
@@ -460,6 +525,42 @@ const Layout = () => {
 
       {/* Al final: Almacenamiento, Versión y Toggle de Tema Funcional */}
       <Box sx={{ p: 0.2, mt: 'auto' }}>
+        {showInstallBtn && (
+          <Box
+            onClick={handleInstallClick}
+            sx={{
+              mb: 1.0,
+              cursor: 'pointer',
+              borderRadius: '8px',
+              p: '6px 10px',
+              bgcolor: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              transition: 'background 120ms',
+              '&:hover': {
+                bgcolor: 'rgba(59, 130, 246, 0.18)',
+                borderColor: '#3B82F6'
+              }
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.0 }}>
+              <GetAppIcon sx={{ fontSize: '16px', color: '#3B82F6' }} />
+              <Typography variant="caption" sx={{ color: '#3B82F6', fontWeight: 'bold', fontSize: '11px' }}>
+                Instalar Pixel Mail
+              </Typography>
+            </Box>
+            <IconButton
+              size="small"
+              onClick={handleDismissInstall}
+              sx={{ p: 0.2, color: 'text.secondary', '&:hover': { color: 'error.main' } }}
+            >
+              <CloseIcon sx={{ fontSize: '13px' }} />
+            </IconButton>
+          </Box>
+        )}
+
         <Box
           onClick={() => setStorageModalOpen(true)}
           sx={{
@@ -497,7 +598,7 @@ const Layout = () => {
 
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '10.5px' }}>
-            versión 8.18
+            versión 9.1
           </Typography>
 
           <Tooltip title={mode === 'dark' ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}>
@@ -541,9 +642,17 @@ const Layout = () => {
           bgcolor: mode === 'dark' ? 'rgba(15, 17, 23, 0.8)' : 'rgba(244, 247, 251, 0.8)',
           backdropFilter: 'blur(12px)',
           zIndex: (theme) => theme.zIndex.drawer + 1,
+          pt: { xs: 'env(safe-area-inset-top)' }
         }}
       >
-        <Toolbar sx={{ justifyContent: 'space-between', gap: 2, px: { xs: 1.5, md: 2 }, minHeight: '56px !important' }}>
+        <Toolbar sx={{
+          justifyContent: 'space-between',
+          gap: 2,
+          px: { xs: 1.5, md: 2 },
+          pl: { xs: 'calc(12px + env(safe-area-inset-left))' },
+          pr: { xs: 'calc(12px + env(safe-area-inset-right))' },
+          minHeight: '56px !important'
+        }}>
           <IconButton
             color="inherit"
             aria-label="open drawer"
@@ -703,12 +812,15 @@ const Layout = () => {
         </Drawer>
       </Box>
 
-      {/* Área principal del contenido súper ancha y con márgenes reducidos */}
+      {/* Área principal del contenido súper ancha y con márgenes reducidos con soporte de Safe Areas */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: { xs: 1.5, md: 2.5 },
+          pt: { xs: 'calc(12px + env(safe-area-inset-top))', md: 2.5 },
+          pb: { xs: 'calc(12px + env(safe-area-inset-bottom))', md: 2.5 },
+          pl: { xs: 'calc(12px + env(safe-area-inset-left))', md: 2.5 },
+          pr: { xs: 'calc(12px + env(safe-area-inset-right))', md: 2.5 },
           width: { md: `calc(100% - ${drawerWidth}px)` },
           mt: '56px',
           bgcolor: mode === 'dark' ? '#0F1117' : '#F4F7FB',
@@ -719,6 +831,32 @@ const Layout = () => {
         }}
       >
         <Box sx={{ width: '100%', maxWidth: '100%', flexGrow: 1, position: 'relative', minHeight: '100%' }}>
+          {!isOnline && (
+            <Box
+              sx={{
+                mb: 2,
+                p: 1.5,
+                borderRadius: '8px',
+                bgcolor: '#EF4444',
+                color: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+              }}
+            >
+              <CloudOffIcon sx={{ fontSize: '20px' }} />
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                  Sin conexión
+                </Typography>
+                <Typography variant="caption" sx={{ opacity: 0.9, display: 'block' }}>
+                  Se ha perdido la conexión de red. El envío de correos está deshabilitado temporalmente para proteger tu trabajo y no perder borradores.
+                </Typography>
+              </Box>
+            </Box>
+          )}
+
           {authLoading ? (
             <Box sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', bgcolor: 'transparent' }}>
               <CircularProgress size={32} />
@@ -917,6 +1055,62 @@ const Layout = () => {
               </TableBody>
             </Table>
           </TableContainer>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de instrucciones de instalación para iOS */}
+      <Dialog
+        open={iosInstallDialogOpen}
+        onClose={() => setIosInstallDialogOpen(false)}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '12px',
+              p: 2,
+              maxWidth: 340,
+              bgcolor: mode === 'dark' ? '#1B2130' : '#FFFFFF',
+            }
+          }
+        }}
+      >
+        <DialogTitle sx={{ p: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+            Instalar en tu iPhone / iPad
+          </Typography>
+          <IconButton size="small" onClick={() => setIosInstallDialogOpen(false)}>
+            <CloseIcon sx={{ fontSize: '18px' }} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 1, mt: 1 }}>
+          <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+            Sigue estos sencillos pasos para agregar Pixel Mail a tu pantalla de inicio:
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+              <Box sx={{ bgcolor: 'primary.main', color: '#FFFFFF', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold', flexShrink: 0, mt: 0.2 }}>
+                1
+              </Box>
+              <Typography variant="body2" sx={{ fontSize: '12px' }}>
+                Abre Pixel Mail en <strong>Safari</strong> y toca el botón <strong>Compartir</strong> <IosShareIcon sx={{ fontSize: '16px', display: 'inline', verticalAlign: 'middle', mx: 0.5, color: 'primary.main' }} /> en la barra inferior.
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+              <Box sx={{ bgcolor: 'primary.main', color: '#FFFFFF', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold', flexShrink: 0, mt: 0.2 }}>
+                2
+              </Box>
+              <Typography variant="body2" sx={{ fontSize: '12px' }}>
+                En el menú de opciones, desliza hacia abajo y selecciona <strong>"Agregar a pantalla de inicio"</strong>.
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+              <Box sx={{ bgcolor: 'primary.main', color: '#FFFFFF', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold', flexShrink: 0, mt: 0.2 }}>
+                3
+              </Box>
+              <Typography variant="body2" sx={{ fontSize: '12px' }}>
+                Toca <strong>"Agregar"</strong> en la esquina superior derecha para finalizar.
+              </Typography>
+            </Box>
+          </Box>
         </DialogContent>
       </Dialog>
     </Box>

@@ -117,6 +117,21 @@ const Redactar = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const [to, setTo] = useState('');
   const [cc, setCc] = useState('');
   const [bcc, setBcc] = useState('');
@@ -301,6 +316,11 @@ const Redactar = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || sending) return;
+
+    if (!isOnline) {
+      setError('No puedes enviar correos mientras estás sin conexión a internet. Tu borrador se mantendrá a salvo aquí.');
+      return;
+    }
 
     const html = message;
     const bodyText = html
@@ -818,22 +838,22 @@ const Redactar = () => {
             type="submit"
             variant="contained"
             size="large"
-            endIcon={sending ? null : <SendIcon />}
+            endIcon={sending || !isOnline ? null : <SendIcon />}
             sx={{
               minWidth: 160,
               py: 1.2,
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
-              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+              background: !isOnline ? '#94A3B8' : 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+              boxShadow: !isOnline ? 'none' : '0 4px 12px rgba(59, 130, 246, 0.3)',
               fontWeight: 'bold',
               color: '#FFFFFF',
               '&:hover': {
-                background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)',
+                background: !isOnline ? '#94A3B8' : 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)',
               }
             }}
-            disabled={sending}
+            disabled={sending || !isOnline}
           >
-            {sending ? <CircularProgress size={24} color="inherit" /> : 'Enviar'}
+            {sending ? <CircularProgress size={24} color="inherit" /> : (!isOnline ? 'Sin conexión' : 'Enviar')}
           </Button>
         </Box>
       </Paper>
