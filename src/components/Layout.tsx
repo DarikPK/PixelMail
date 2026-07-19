@@ -633,7 +633,7 @@ const Layout = () => {
 
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '10.5px', display: { xs: 'none', md: 'block' } }}>
-            versión 9.4
+            versión 9.5
           </Typography>
 
           <Tooltip title={mode === 'dark' ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}>
@@ -681,12 +681,18 @@ const Layout = () => {
         }}
       >
         <Toolbar sx={{
+          display: { xs: 'grid', md: 'flex' },
+          gridTemplateColumns: { xs: 'auto minmax(0, 1fr) auto auto', md: 'none' },
           justifyContent: 'space-between',
-          gap: { xs: 1.0, md: 2 },
+          alignItems: 'center',
+          gap: { xs: 0.8, md: 2 },
           px: { xs: 1.0, md: 2 },
           pl: { xs: 'calc(8px + env(safe-area-inset-left))' },
           pr: { xs: 'calc(8px + env(safe-area-inset-right))' },
-          minHeight: { xs: '48px !important', md: '56px !important' }
+          minHeight: { xs: '48px !important', md: '56px !important' },
+          width: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box'
         }}>
           <IconButton
             color="inherit"
@@ -1154,8 +1160,8 @@ const Layout = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Botón Flotante de Redacción (FAB) para móviles */}
-      {isMobile && (
+      {/* Botón Flotante de Redacción (FAB) para móviles - Ocultado en pantalla de redactar */}
+      {isMobile && location.pathname !== '/redactar' && (
         <Fab
           color="primary"
           aria-label="Redactar"

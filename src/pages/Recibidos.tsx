@@ -508,9 +508,9 @@ const Recibidos = () => {
 
   return (
     <Box sx={{ animation: 'fadeIn 200ms ease-in-out' }}>
-      {/* Título de la sección compactado a 26px en escritorio */}
+      {/* Título de la sección con tipografía fluida de 25-32px en móviles */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.0, mb: 1.5 }}>
-        <Typography variant="h3" sx={{ fontWeight: 700, color: 'text.primary', letterSpacing: '-0.5px', fontSize: { xs: '22px', md: '26px' }, lineHeight: 1.2 }}>
+        <Typography variant="h3" sx={{ fontWeight: 700, color: 'text.primary', letterSpacing: '-0.5px', fontSize: { xs: 'clamp(25px, 7vw, 32px)', md: '26px' }, lineHeight: 1.2 }}>
           {dynamicTitle}
         </Typography>
 

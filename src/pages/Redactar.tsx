@@ -147,6 +147,11 @@ const Redactar = () => {
   const [bcc, setBcc] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+
+  // Controlar visibilidad de campos opcionales CC/BCC en móviles
+  const [showCcBcc, setShowCcBcc] = useState(() => {
+    return Boolean(cc || bcc);
+  });
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -218,6 +223,9 @@ const Redactar = () => {
 
           setTo(initialTo);
           setSubject(initialSubject);
+          if (initialTo) {
+            setShowCcBcc(true);
+          }
 
           const shouldInsert = preferences.includeInReplies;
           setAddSignature(shouldInsert);
@@ -561,116 +569,154 @@ const Redactar = () => {
         </DialogActions>
       </Dialog>
 
-      <Typography variant="h3" sx={{ fontWeight: 800, color: '#FFFFFF', letterSpacing: '-1px', mb: 3 }}>
+      <Typography variant="h3" sx={{ fontWeight: 800, color: '#FFFFFF', letterSpacing: '-1px', mb: 3, fontSize: { xs: 'clamp(30px, 9vw, 42px)', md: '42px' } }}>
         Redactar Correo
       </Typography>
 
-      <Paper component="form" onSubmit={handleSubmit} autoComplete="off" sx={{ p: 4, borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', bgcolor: '#131722' }}>
+      <Paper component="form" onSubmit={handleSubmit} autoComplete="off" sx={{ p: { xs: 2, sm: 4 }, borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', bgcolor: '#131722', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
 
         {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>{error}</Alert>}
 
-        <TextField
-          fullWidth
-          label="De"
-          value={user?.email || "Cargando..."}
-          disabled
-          margin="normal"
-          variant="filled"
-          slotProps={{
-            input: {
-              sx: { borderRadius: '12px', bgcolor: 'rgba(255,255,255,0.02)' }
-            }
-          }}
-        />
-
-        <TextField
-          fullWidth
-          label="Para"
-          placeholder="ejemplo@correo.com"
-          value={to}
-          onChange={handleToChange}
-          margin="normal"
-          required
-          disabled={sending}
-          name="pixel_recipient_primary"
-          id="pixel-recipient-primary"
-          type="text"
-          autoComplete="new-password"
-          slotProps={{
-            htmlInput: {
-              autoComplete: "new-password",
-              "data-lpignore": "true",
-              "data-1p-ignore": "true",
-              "data-form-type": "other",
-              "aria-autocomplete": "none",
-              inputMode: "email",
-              readOnly: true,
-              onFocus: handleUnlockInput
-            },
-            input: {
-              sx: { borderRadius: '12px' }
-            }
-          }}
-        />
-
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
-          <TextField
-            fullWidth
-            label="CC"
-            placeholder="copia@correo.com"
-            value={cc}
-            onChange={handleCcChange}
-            margin="normal"
-            disabled={sending}
-            name="pixel_recipient_copy"
-            id="pixel-recipient-copy"
-            type="text"
-            autoComplete="new-password"
-            slotProps={{
-              htmlInput: {
-                autoComplete: "new-password",
-                "data-lpignore": "true",
-                "data-1p-ignore": "true",
-                "data-form-type": "other",
-                "aria-autocomplete": "none",
-                inputMode: "email",
-                readOnly: true,
-                onFocus: handleUnlockInput
-              },
-              input: {
-                sx: { borderRadius: '12px' }
-              }
-            }}
-          />
-          <TextField
-            fullWidth
-            label="CCO"
-            placeholder="copia-oculta@correo.com"
-            value={bcc}
-            onChange={handleBccChange}
-            margin="normal"
-            disabled={sending}
-            name="pixel_recipient_hidden"
-            id="pixel-recipient-hidden"
-            type="text"
-            autoComplete="new-password"
-            slotProps={{
-              htmlInput: {
-                autoComplete: "new-password",
-                "data-lpignore": "true",
-                "data-1p-ignore": "true",
-                "data-form-type": "other",
-                "aria-autocomplete": "none",
-                inputMode: "email",
-                readOnly: true,
-                onFocus: handleUnlockInput
-              },
-              input: {
-                sx: { borderRadius: '12px' }
-              }
-            }}
-          />
+        {/* Campo "De" compacto y legible en móviles */}
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          mb: 1.5,
+          p: 1.2,
+          borderRadius: '8px',
+          bgcolor: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          width: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box'
+        }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', minWidth: '28px', flexShrink: 0 }}>
+            De:
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#FFFFFF', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+            {user?.email || "Cargando..."}
+          </Typography>
         </Box>
+
+        {/* Campo "Para" con botón CC/CCO integrado para móviles */}
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', width: '100%', minWidth: 0 }}>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <TextField
+              fullWidth
+              label="Para"
+              placeholder="ejemplo@correo.com"
+              value={to}
+              onChange={handleToChange}
+              margin="normal"
+              required
+              disabled={sending}
+              name="pixel_recipient_primary"
+              id="pixel-recipient-primary"
+              type="text"
+              autoComplete="new-password"
+              slotProps={{
+                htmlInput: {
+                  autoComplete: "new-password",
+                  "data-lpignore": "true",
+                  "data-1p-ignore": "true",
+                  "data-form-type": "other",
+                  "aria-autocomplete": "none",
+                  inputMode: "email",
+                  readOnly: true,
+                  onFocus: handleUnlockInput
+                },
+                input: {
+                  sx: { borderRadius: '12px' }
+                }
+              }}
+            />
+          </Box>
+
+          {!showCcBcc && (
+            <Button
+              size="small"
+              onClick={() => setShowCcBcc(true)}
+              sx={{
+                textTransform: 'none',
+                minWidth: '68px',
+                height: '40px',
+                borderRadius: '8px',
+                mt: 1.0,
+                border: '1px solid',
+                borderColor: 'rgba(255,255,255,0.15)',
+                color: 'text.secondary',
+                fontWeight: 'bold',
+                fontSize: '11px',
+                flexShrink: 0
+              }}
+            >
+              CC/CCO
+            </Button>
+          )}
+        </Box>
+
+        {/* Campos CC y CCO colapsables y apilados en móvil */}
+        {showCcBcc && (
+          <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', sm: 'row' }, width: '100%', minWidth: 0, mt: 0.5, mb: 1.0 }}>
+            <TextField
+              fullWidth
+              label="CC"
+              placeholder="copia@correo.com"
+              value={cc}
+              onChange={handleCcChange}
+              margin="none"
+              disabled={sending}
+              name="pixel_recipient_copy"
+              id="pixel-recipient-copy"
+              type="text"
+              autoComplete="new-password"
+              slotProps={{
+                htmlInput: {
+                  autoComplete: "new-password",
+                  "data-lpignore": "true",
+                  "data-1p-ignore": "true",
+                  "data-form-type": "other",
+                  "aria-autocomplete": "none",
+                  inputMode: "email",
+                  readOnly: true,
+                  onFocus: handleUnlockInput
+                },
+                input: {
+                  sx: { borderRadius: '12px' }
+                }
+              }}
+            />
+            <TextField
+              fullWidth
+              label="CCO"
+              placeholder="copia-oculta@correo.com"
+              value={bcc}
+              onChange={handleBccChange}
+              margin="none"
+              disabled={sending}
+              name="pixel_recipient_hidden"
+              id="pixel-recipient-hidden"
+              type="text"
+              autoComplete="new-password"
+              slotProps={{
+                htmlInput: {
+                  autoComplete: "new-password",
+                  "data-lpignore": "true",
+                  "data-1p-ignore": "true",
+                  "data-form-type": "other",
+                  "aria-autocomplete": "none",
+                  inputMode: "email",
+                  readOnly: true,
+                  onFocus: handleUnlockInput
+                },
+                input: {
+                  sx: { borderRadius: '12px' }
+                }
+              }}
+            />
+          </Box>
+        )}
 
         <TextField
           fullWidth

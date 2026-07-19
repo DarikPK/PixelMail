@@ -106,7 +106,11 @@ const MenuBar = ({ editor }: { editor: any }) => {
         size="small"
         value={editor.getAttributes('textStyle').fontFamily || 'Inter'}
         onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
-        sx={{ minWidth: 120, height: 32 }}
+        sx={{
+          minWidth: { xs: 100, sm: 120 },
+          height: 32,
+          flex: { xs: '1 1 140px', sm: '0 1 auto' }
+        }}
       >
         <MenuItem value="Inter">Predeterminado</MenuItem>
         <MenuItem value="Arial">Arial</MenuItem>
@@ -122,7 +126,11 @@ const MenuBar = ({ editor }: { editor: any }) => {
         size="small"
         value={editor.getAttributes('textStyle').fontSize || '16px'}
         onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
-        sx={{ minWidth: 80, height: 32 }}
+        sx={{
+          minWidth: { xs: 68, sm: 80 },
+          height: 32,
+          flex: { xs: '1 1 80px', sm: '0 1 auto' }
+        }}
       >
         <MenuItem value="12px">12px</MenuItem>
         <MenuItem value="14px">14px</MenuItem>
