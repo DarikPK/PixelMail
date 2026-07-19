@@ -133,6 +133,7 @@ const Recibidos = () => {
     emails,
     folders,
     loading,
+    counts,
     activeNav,
     activeFolderId,
     selectedEmailIds,
@@ -466,10 +467,10 @@ const Recibidos = () => {
     );
   }
 
-  // Las pestañas superiores muestran "Recibidos" + las carpetas del usuario
+  // Las pestañas superiores muestran "Recibidos" + las carpetas del usuario con contadores discretos
   const tabHeaders = [
-    { label: 'RECIBIDOS', id: 'recibidos', type: 'recibidos', color: '#3B82F6' },
-    ...folders.map(f => ({ label: f.name.toUpperCase(), id: f.id, type: 'folder', color: f.color }))
+    { label: 'RECIBIDOS', count: counts.inbox, id: 'recibidos', type: 'recibidos', color: '#3B82F6' },
+    ...folders.map(f => ({ label: f.name.toUpperCase(), count: counts.folders[f.id] || 0, id: f.id, type: 'folder', color: f.color }))
   ];
 
   const currentTabValue = activeNav === 'folder'
@@ -524,16 +525,19 @@ const Recibidos = () => {
         )}
       </Box>
 
-      {/* Pestañas de la Bandeja (Recibidos + Carpetas) - Ocultar en la Papelera */}
+      {/* Pestañas de la Bandeja (Recibidos + Carpetas) - Ocultar en la Papelera, Deslizables Horizontalmente en Móvil */}
       {activeNav !== 'eliminados' && (
         <Box sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
           <Tabs
             value={currentTabValue}
             onChange={handleTabChange}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{
               minHeight: '34px',
               '& .MuiTabs-indicator': {
-                height: '2px',
+                height: '2.5px',
                 bgcolor: '#3B82F6',
                 borderRadius: '2px 2px 0 0'
               }
@@ -549,8 +553,11 @@ const Recibidos = () => {
                       {tab.type === 'folder' && (
                         <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: tab.color }} />
                       )}
-                      <Typography variant="body2" sx={{ fontWeight: 600, letterSpacing: '0.2px', fontSize: '11.5px' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, letterSpacing: '0.2px', fontSize: '11px', display: 'flex', gap: 0.5, alignItems: 'center' }}>
                         {tab.label}
+                        <Box component="span" sx={{ fontSize: '9px', opacity: 0.7, bgcolor: 'action.hover', px: 0.6, py: 0.1, borderRadius: '10px', fontWeight: 'bold', color: 'text.secondary' }}>
+                          {tab.count}
+                        </Box>
                       </Typography>
                     </Box>
                   }
@@ -926,14 +933,23 @@ const Recibidos = () => {
                       p: { xs: '10px 12px !important', md: '0px 12px !important' },
                       width: '100%'
                     }}>
-                      {/* VISTA MÓVIL (xs a md) */}
-                      <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', gap: 0.5 }}>
+                      {/* VISTA MÓVIL (xs a md) - Rediseñada para sentirse 100% nativa con gestos simulados */}
+                      <Box sx={{
+                        display: { xs: 'flex', md: 'none' },
+                        flexDirection: 'column',
+                        gap: 0.2,
+                        transition: 'transform 0.2s ease, opacity 0.2s ease',
+                        '&:active': {
+                          transform: 'scale(0.99) translateX(4px)',
+                          opacity: 0.95
+                        }
+                      }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.0, minWidth: 0 }}>
-                            <Avatar sx={{ bgcolor: avatarBg, width: 24, height: 24, fontSize: '10px', fontWeight: 'bold' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, minWidth: 0 }}>
+                            <Avatar sx={{ bgcolor: avatarBg, width: 22, height: 22, fontSize: '9px', fontWeight: 'bold' }}>
                               {initial}
                             </Avatar>
-                            <Typography variant="body2" noWrap sx={{ fontWeight: isUnread ? 700 : 500, color: 'text.primary', fontSize: '12.5px' }}>
+                            <Typography variant="body2" noWrap sx={{ fontWeight: isUnread ? 600 : 500, color: 'text.primary', fontSize: '17px', fontFamily: '"Inter", sans-serif' }}>
                               {displayName}
                             </Typography>
                             {isUnread && (
@@ -942,27 +958,27 @@ const Recibidos = () => {
                               </Box>
                             )}
                           </Box>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }} onClick={(e) => e.stopPropagation()}>
-                            <Typography variant="caption" sx={{ color: isUnread ? '#3B82F6' : 'text.secondary', fontWeight: isUnread ? 700 : 500, fontSize: '11px' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }} onClick={(e) => e.stopPropagation()}>
+                            <Typography variant="caption" sx={{ color: isUnread ? '#3B82F6' : 'text.secondary', fontWeight: isUnread ? 700 : 500, fontSize: '12px' }}>
                               {normalizedEmail.receivedAt?.toLocaleDateString ? normalizedEmail.receivedAt.toLocaleDateString('es-PE', { month: 'short', day: 'numeric' }) : 'Sin fecha'}
                             </Typography>
-                            <IconButton size="small" onClick={(e) => handleToggleStar(e, normalizedEmail)} sx={{ p: 0.2, color: normalizedEmail.starred ? '#FACC15' : 'text.disabled' }}>
-                              {normalizedEmail.starred ? <Star sx={{ fontSize: '16px' }} /> : <StarBorder sx={{ fontSize: '16px' }} />}
+                            <IconButton size="small" onClick={(e) => handleToggleStar(e, normalizedEmail)} sx={{ p: 0.1, color: normalizedEmail.starred ? '#FACC15' : 'text.disabled' }}>
+                              {normalizedEmail.starred ? <Star sx={{ fontSize: '14px' }} /> : <StarBorder sx={{ fontSize: '14px' }} />}
                             </IconButton>
                           </Box>
                         </Box>
 
                         <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1.0 }}>
                           <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                            <Typography variant="body2" noWrap sx={{ fontWeight: isUnread ? 600 : 400, color: 'text.primary', fontSize: '12px' }}>
+                            <Typography variant="body2" noWrap sx={{ fontWeight: isUnread ? 500 : 400, color: 'text.primary', fontSize: '15px' }}>
                               {normalizedEmail.subject || 'Sin asunto'}
                             </Typography>
-                            <Typography variant="caption" noWrap sx={{ color: 'text.secondary', fontSize: '11px', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                            <Typography variant="caption" noWrap sx={{ color: 'text.secondary', fontSize: '13px', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                               {previewText}
                             </Typography>
                           </Box>
                           {safeArray(normalizedEmail.attachments).length > 0 && (
-                            <AttachIcon sx={{ fontSize: '12px', color: 'text.disabled', alignSelf: 'center' }} />
+                            <AttachIcon sx={{ fontSize: '11px', color: 'text.disabled', alignSelf: 'center' }} />
                           )}
                         </Box>
                       </Box>

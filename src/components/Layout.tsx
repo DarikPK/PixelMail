@@ -14,7 +14,6 @@ import {
   useMediaQuery,
   useTheme,
   Button,
-  LinearProgress,
   InputBase,
   Avatar,
   Menu,
@@ -34,7 +33,8 @@ import {
   Select,
   FormControl,
   InputLabel,
-  CircularProgress
+  CircularProgress,
+  Fab
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -80,6 +80,13 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+function getStorageProgressString(usedPercent: number): string {
+  const totalBlocks = 10;
+  const activeBlocks = Math.max(1, Math.min(10, Math.round((usedPercent / 100) * totalBlocks)));
+  const inactiveBlocks = totalBlocks - activeBlocks;
+  return '█'.repeat(activeBlocks) + '░'.repeat(inactiveBlocks);
+}
+
 const Layout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorOpen] = useState<null | HTMLElement>(null);
@@ -88,6 +95,7 @@ const Layout = () => {
   const [showInstallBtn, setShowInstallBtn] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [iosInstallDialogOpen, setIosInstallDialogOpen] = useState(false);
+  const [foldersSectionExpanded, setFoldersSectionExpanded] = useState(true);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -330,8 +338,8 @@ const Layout = () => {
         </Typography>
       </Box>
 
-      {/* Botón muy llamativo: Redactar (alto aproximado de 40px) */}
-      <Box sx={{ my: 1.0 }}>
+      {/* Botón muy llamativo: Redactar (alto aproximado de 40px) - Solo Escritorio */}
+      <Box sx={{ my: 1.0, display: { xs: 'none', md: 'block' } }}>
         <Button
           fullWidth
           variant="contained"
@@ -407,118 +415,138 @@ const Layout = () => {
           );
         })}
 
-        {/* Sección "Carpetas" con explorador interactivo */}
-        <Typography variant="caption" sx={{ display: 'block', px: 1.0, pt: 1.0, pb: 0.2, textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'bold', color: '#6F7A8A', fontSize: '9.5px' }}>
-          Carpetas
-        </Typography>
-        {folders.map((folder) => {
-          const isSelected = activeNav === 'folder' && activeFolderId === folder.id;
-          const isExpanded = !!expandedFolders[folder.id];
-          const folderEmails = emails.filter((e) => e.folderId === folder.id);
-          const folderCount = counts.folders[folder.id] || 0;
+        {/* Sección "Carpetas" colapsable interactiva con animación */}
+        <ListItemButton
+          onClick={() => setFoldersSectionExpanded(!foldersSectionExpanded)}
+          sx={{
+            py: 0.5,
+            px: 1.0,
+            mt: 1.0,
+            borderRadius: '6px',
+            color: '#6F7A8A',
+            '&:hover': { bgcolor: 'transparent' }
+          }}
+        >
+          <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'bold', fontSize: '9.5px', flexGrow: 1 }}>
+            Carpetas
+          </Typography>
+          <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: '10px', transform: foldersSectionExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 180ms ease' }}>
+            &gt;
+          </Typography>
+        </ListItemButton>
 
-          return (
-            <Box key={folder.id} sx={{ mb: 0.1 }}>
-              <ListItemButton
-                selected={isSelected}
-                onClick={() => {
-                  navigate(`/recibidos?folder=${folder.id}`);
-                  if (isMobile) setMobileOpen(false);
-                }}
-                sx={{
-                  py: 0.4,
-                  px: 1.0,
-                  height: '32px',
-                  borderRadius: '6px',
-                  color: isSelected ? (mode === 'dark' ? '#FFFFFF' : '#3B82F6') : (mode === 'dark' ? '#B8C1D1' : '#64748B'),
-                  bgcolor: isSelected ? (mode === 'dark' ? 'rgba(59, 130, 246, 0.15) !important' : 'rgba(59, 130, 246, 0.08) !important') : 'transparent',
-                  '&:hover': {
-                    bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.03)',
-                  }
-                }}
-              >
-                {/* Botón de expandir/colapsar */}
-                <IconButton
-                  size="small"
-                  onClick={(e) => toggleFolderExpand(folder.id, e)}
-                  sx={{ p: 0.1, mr: 0.5, color: 'text.secondary' }}
-                >
-                  {isExpanded ? <ArrowDownIcon sx={{ fontSize: '15px' }} /> : <ArrowRightIcon sx={{ fontSize: '15px' }} />}
-                </IconButton>
+        <Collapse in={foldersSectionExpanded} timeout={200}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.2 }}>
+            {folders.map((folder) => {
+              const isSelected = activeNav === 'folder' && activeFolderId === folder.id;
+              const isExpanded = !!expandedFolders[folder.id];
+              const folderEmails = emails.filter((e) => e.folderId === folder.id);
+              const folderCount = counts.folders[folder.id] || 0;
 
-                <ListItemIcon sx={{ minWidth: 20, color: folder.color, '& svg': { fontSize: '15px' } }}>
-                  <FolderIcon />
-                </ListItemIcon>
+              return (
+                <Box key={folder.id} sx={{ mb: 0.1 }}>
+                  <ListItemButton
+                    selected={isSelected}
+                    onClick={() => {
+                      navigate(`/recibidos?folder=${folder.id}`);
+                      if (isMobile) setMobileOpen(false);
+                    }}
+                    sx={{
+                      py: 0.4,
+                      px: 1.0,
+                      height: '32px',
+                      borderRadius: '6px',
+                      color: isSelected ? (mode === 'dark' ? '#FFFFFF' : '#3B82F6') : (mode === 'dark' ? '#B8C1D1' : '#64748B'),
+                      bgcolor: isSelected ? (mode === 'dark' ? 'rgba(59, 130, 246, 0.15) !important' : 'rgba(59, 130, 246, 0.08) !important') : 'transparent',
+                      '&:hover': {
+                        bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.03)',
+                      }
+                    }}
+                  >
+                    {/* Botón de expandir/colapsar */}
+                    <IconButton
+                      size="small"
+                      onClick={(e) => toggleFolderExpand(folder.id, e)}
+                      sx={{ p: 0.1, mr: 0.5, color: 'text.secondary' }}
+                    >
+                      {isExpanded ? <ArrowDownIcon sx={{ fontSize: '15px' }} /> : <ArrowRightIcon sx={{ fontSize: '15px' }} />}
+                    </IconButton>
 
-                <ListItemText
-                  primary={`${folder.name} (${folderCount})`}
-                  slotProps={{
-                    primary: { fontSize: '12px', fontWeight: isSelected ? 600 : 500 } as any
-                  }}
-                />
-              </ListItemButton>
+                    <ListItemIcon sx={{ minWidth: 20, color: folder.color, '& svg': { fontSize: '15px' } }}>
+                      <FolderIcon />
+                    </ListItemIcon>
 
-              {/* Vista previa miniatura de los correos contenidos (Mini Outlook) */}
-              <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                <List component="div" disablePadding sx={{ pl: 2, mt: 0.5, mb: 0.5, display: 'flex', flexDirection: 'column', gap: 0.4 }}>
-                  {folderEmails.length === 0 ? (
-                    <Typography variant="caption" sx={{ pl: 1, py: 0.2, color: 'text.disabled', fontStyle: 'italic', fontSize: '10px' }}>
-                      Vacía
-                    </Typography>
-                  ) : (
-                    folderEmails.slice(0, 3).map((email) => {
-                      const senderName = email.fromName || email.fromEmail.split('@')[0] || email.from;
-                      const initial = senderName.charAt(0).toUpperCase();
-                      const isUnread = !email.read;
+                    <ListItemText
+                      primary={`${folder.name} (${folderCount})`}
+                      slotProps={{
+                        primary: { fontSize: '12px', fontWeight: isSelected ? 600 : 500 } as any
+                      }}
+                    />
+                  </ListItemButton>
 
-                      return (
-                        <Box
-                          key={email.id}
-                          onClick={() => {
-                            navigate(`/recibidos?folder=${folder.id}&open=${email.id}`);
-                            if (isMobile) setMobileOpen(false);
-                          }}
-                          sx={{
-                            p: 0.5,
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            bgcolor: isUnread ? (mode === 'dark' ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.05)') : 'transparent',
-                            border: `1px solid ${isUnread ? 'rgba(59,130,246,0.2)' : 'transparent'}`,
-                            transition: 'all 100ms',
-                            display: 'flex',
-                            gap: 0.6,
-                            alignItems: 'center',
-                            minWidth: 0,
-                            '&:hover': {
-                              bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)'
-                            }
-                          }}
-                        >
-                          <Avatar sx={{ bgcolor: folder.color, width: 16, height: 16, fontSize: '8px', fontWeight: 'bold', color: '#FFF' }}>
-                            {initial}
-                          </Avatar>
-                          <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                            <Typography variant="caption" noWrap sx={{ fontWeight: isUnread ? 700 : 500, fontSize: '10px', color: 'text.primary', display: 'block', lineHeight: 1.1 }}>
-                              {senderName}
-                            </Typography>
-                            <Typography variant="caption" noWrap sx={{ fontSize: '9px', color: 'text.secondary', display: 'block', lineHeight: 1.1 }}>
-                              {email.subject || '(Sin asunto)'}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      );
-                    })
-                  )}
-                  {folderEmails.length > 3 && (
-                    <Typography variant="caption" sx={{ pl: 1, color: '#3B82F6', fontWeight: 600, fontSize: '9px' }}>
-                      + {folderEmails.length - 3} más...
-                    </Typography>
-                  )}
-                </List>
-              </Collapse>
-            </Box>
-          );
-        })}
+                  {/* Vista previa miniatura de los correos contenidos (Mini Outlook) */}
+                  <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                    <List component="div" disablePadding sx={{ pl: 2, mt: 0.5, mb: 0.5, display: 'flex', flexDirection: 'column', gap: 0.4 }}>
+                      {folderEmails.length === 0 ? (
+                        <Typography variant="caption" sx={{ pl: 1, py: 0.2, color: 'text.disabled', fontStyle: 'italic', fontSize: '10px' }}>
+                          Vacía
+                        </Typography>
+                      ) : (
+                        folderEmails.slice(0, 3).map((email) => {
+                          const senderName = email.fromName || email.fromEmail.split('@')[0] || email.from;
+                          const initial = senderName.charAt(0).toUpperCase();
+                          const isUnread = !email.read;
+
+                          return (
+                            <Box
+                              key={email.id}
+                              onClick={() => {
+                                navigate(`/recibidos?folder=${folder.id}&open=${email.id}`);
+                                if (isMobile) setMobileOpen(false);
+                              }}
+                              sx={{
+                                p: 0.5,
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                bgcolor: isUnread ? (mode === 'dark' ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.05)') : 'transparent',
+                                border: `1px solid ${isUnread ? 'rgba(59,130,246,0.2)' : 'transparent'}`,
+                                transition: 'all 100ms',
+                                display: 'flex',
+                                gap: 0.6,
+                                alignItems: 'center',
+                                minWidth: 0,
+                                '&:hover': {
+                                  bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)'
+                                }
+                              }}
+                            >
+                              <Avatar sx={{ bgcolor: folder.color, width: 16, height: 16, fontSize: '8px', fontWeight: 'bold', color: '#FFF' }}>
+                                {initial}
+                              </Avatar>
+                              <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                                <Typography variant="caption" noWrap sx={{ fontWeight: isUnread ? 700 : 500, fontSize: '10px', color: 'text.primary', display: 'block', lineHeight: 1.1 }}>
+                                  {senderName}
+                                </Typography>
+                                <Typography variant="caption" noWrap sx={{ fontSize: '9px', color: 'text.secondary', display: 'block', lineHeight: 1.1 }}>
+                                  {email.subject || '(Sin asunto)'}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          );
+                        })
+                      )}
+                      {folderEmails.length > 3 && (
+                        <Typography variant="caption" sx={{ pl: 1, color: '#3B82F6', fontWeight: 600, fontSize: '9px' }}>
+                          + {folderEmails.length - 3} más...
+                        </Typography>
+                      )}
+                    </List>
+                  </Collapse>
+                </Box>
+              );
+            })}
+          </Box>
+        </Collapse>
       </List>
 
       <Divider sx={{ borderColor: mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.10)', my: 0.5 }} />
@@ -567,38 +595,45 @@ const Layout = () => {
             mb: 1.0,
             cursor: 'pointer',
             borderRadius: '6px',
-            p: '4px 6px',
-            transition: 'background 120ms',
+            p: '6px 8px',
+            transition: 'all 120ms',
+            bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.01)',
+            border: `1px solid ${mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'}`,
             '&:hover': {
-              bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.03)'
+              bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.03)',
+              borderColor: '#3B82F6'
             }
           }}
         >
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.2 }}>
-            <Typography variant="caption" sx={{ color: mode === 'dark' ? '#B8C1D1' : '#64748B', fontWeight: 600, fontSize: '10px' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, flexWrap: 'wrap' }}>
+            <Typography variant="caption" sx={{ color: mode === 'dark' ? '#B8C1D1' : '#64748B', fontWeight: 'bold', fontSize: '10px' }}>
               Almacenamiento
             </Typography>
-            <Typography variant="caption" sx={{ color: '#6F7A8A', fontSize: '10px' }}>
+            <Typography variant="caption" sx={{ color: '#6F7A8A', fontSize: '10px', fontWeight: 'medium' }}>
               {formatBytes(storageBreakdown.totalBytes)} de 10 GB
             </Typography>
           </Box>
-          <LinearProgress
-            variant="determinate"
-            value={storageBreakdown.percentageUsed}
+
+          {/* Barra visual moderna solicitada: ██████░░░░ */}
+          <Typography
+            variant="caption"
             sx={{
-              height: 4,
-              borderRadius: '2px',
-              bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)',
-              '& .MuiLinearProgress-bar': {
-                bgcolor: '#3B82F6',
-              }
+              fontFamily: 'monospace',
+              fontSize: '11px',
+              letterSpacing: '1px',
+              color: '#3B82F6',
+              display: 'block',
+              lineHeight: 1.1,
+              mt: 0.2
             }}
-          />
+          >
+            {getStorageProgressString(storageBreakdown.percentageUsed)}
+          </Typography>
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '10.5px' }}>
-            versión 9.1
+          <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '10.5px', display: { xs: 'none', md: 'block' } }}>
+            versión 9.2
           </Typography>
 
           <Tooltip title={mode === 'dark' ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}>
@@ -647,34 +682,34 @@ const Layout = () => {
       >
         <Toolbar sx={{
           justifyContent: 'space-between',
-          gap: 2,
-          px: { xs: 1.5, md: 2 },
-          pl: { xs: 'calc(12px + env(safe-area-inset-left))' },
-          pr: { xs: 'calc(12px + env(safe-area-inset-right))' },
-          minHeight: '56px !important'
+          gap: { xs: 1.0, md: 2 },
+          px: { xs: 1.0, md: 2 },
+          pl: { xs: 'calc(8px + env(safe-area-inset-left))' },
+          pr: { xs: 'calc(8px + env(safe-area-inset-right))' },
+          minHeight: { xs: '48px !important', md: '56px !important' }
         }}>
           <IconButton
             color="inherit"
             aria-label="open drawer"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ display: { md: 'none' }, color: mode === 'dark' ? '#FFFFFF' : '#111827' }}
+            sx={{ display: { md: 'none' }, color: mode === 'dark' ? '#FFFFFF' : '#111827', p: { xs: 0.5, md: 1.0 } }}
           >
             <MenuIcon />
           </IconButton>
 
-          {/* Buscador grande con efecto glass (altura de 34px-38px y ancho equilibrado) */}
+          {/* Buscador compacto con diseño ultra-limpio redondeado */}
           <Box
             sx={{
               display: 'flex',
               alignItems: 'center',
               bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.03)',
               border: `1px solid ${mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.10)'}`,
-              borderRadius: '8px',
+              borderRadius: { xs: '24px', md: '8px' },
               px: 1.2,
-              height: '34px',
+              height: { xs: '40px', md: '34px' },
               width: '100%',
-              maxWidth: 380,
+              maxWidth: { xs: '100%', md: 380 },
               transition: 'all 150ms ease-in-out',
               '&:focus-within': {
                 bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
@@ -783,7 +818,7 @@ const Layout = () => {
         </Toolbar>
       </AppBar>
 
-      {/* Drawer menú lateral */}
+      {/* Drawer menú lateral con ancho premium de 72% en móviles y deslizamiento fluido */}
       <Box
         component="nav"
         sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
@@ -795,7 +830,12 @@ const Layout = () => {
           ModalProps={{ keepMounted: true }}
           sx={{
             display: { xs: 'block', md: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth, borderRight: `1px solid ${mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.10)'}` },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: { xs: '72vw', md: drawerWidth },
+              borderRight: `1px solid ${mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.10)'}`,
+              transition: 'transform 250ms cubic-bezier(0.4, 0, 0.2, 1) !important'
+            },
           }}
         >
           {drawer}
@@ -1113,6 +1153,34 @@ const Layout = () => {
           </Box>
         </DialogContent>
       </Dialog>
+
+      {/* Botón Flotante de Redacción (FAB) para móviles */}
+      {isMobile && (
+        <Fab
+          color="primary"
+          aria-label="Redactar"
+          onClick={() => navigate('/redactar')}
+          sx={{
+            position: 'fixed',
+            bottom: 'calc(24px + env(safe-area-inset-bottom))',
+            right: 'calc(24px + env(safe-area-inset-right))',
+            bgcolor: '#3B82F6',
+            color: '#FFFFFF',
+            zIndex: 1000,
+            boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)',
+            transition: 'transform 180ms cubic-bezier(0.4, 0, 0.2, 1)',
+            '&:hover': {
+              bgcolor: '#2563EB',
+              transform: 'scale(1.08)'
+            },
+            '&:active': {
+              transform: 'scale(0.95)'
+            }
+          }}
+        >
+          <AddIcon />
+        </Fab>
+      )}
     </Box>
   );
 };

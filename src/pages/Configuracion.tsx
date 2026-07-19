@@ -259,7 +259,7 @@ const Configuracion = () => {
   } = useSignatures();
 
   // Navigation sidebar interna
-  const [activeSection, setActiveSection] = useState<'general' | 'cuenta' | 'firma' | 'firmas' | 'reglas' | 'carpetas' | 'apariencia' | 'notificaciones' | 'seguridad'>('firma');
+  const [activeSection, setActiveSection] = useState<'general' | 'cuenta' | 'firma' | 'firmas' | 'reglas' | 'carpetas' | 'apariencia' | 'notificaciones' | 'seguridad' | 'acerca'>('firma');
 
   // Firma visual / builder state
   const [rows, setRows] = useState<Row[]>([]);
@@ -1980,6 +1980,48 @@ const Configuracion = () => {
           </Box>
         );
 
+      case 'acerca':
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5, fontSize: '15px' }}>
+              Acerca de Pixel Mail
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Información de versión y estado de la aplicación.
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+
+            <Card variant="outlined" sx={{ borderRadius: '12px', p: 2.5 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                    Versión actual de Pixel Mail
+                  </Typography>
+                  <Chip label="v9.2" color="primary" size="small" sx={{ fontWeight: 'bold', fontSize: '11px' }} />
+                </Box>
+                <Divider />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2">
+                    Canal de distribución
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '12.5px' }}>
+                    PWA Estable (Trusted Web Activity ready)
+                  </Typography>
+                </Box>
+                <Divider />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2">
+                    Tecnología base
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '12.5px' }}>
+                    React + TypeScript + Vite + MUI
+                  </Typography>
+                </Box>
+              </Box>
+            </Card>
+          </Box>
+        );
+
       default:
         return (
           <Box sx={{ py: 2, textAlign: 'center' }}>
@@ -2014,7 +2056,8 @@ const Configuracion = () => {
               { id: 'cuenta', label: 'Cuenta', icon: <AccountIcon /> },
               { id: 'apariencia', label: 'Apariencia', icon: <AppearanceIcon /> },
               { id: 'notificaciones', label: 'Notificaciones', icon: <NotificationsIcon /> },
-              { id: 'seguridad', label: 'Seguridad', icon: <SecurityIcon /> }
+              { id: 'seguridad', label: 'Seguridad', icon: <SecurityIcon /> },
+              { id: 'acerca', label: 'Acerca de', icon: <SettingsIcon /> }
             ].map((section) => {
               const isActive = activeSection === section.id;
               return (
