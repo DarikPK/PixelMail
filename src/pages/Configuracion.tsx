@@ -63,6 +63,7 @@ import type { Signature } from '../contexts/SignatureContext';
 import { useSignatures } from '../contexts/SignatureContext';
 import { useToast } from '../contexts/ToastContext';
 import { usePwaUpdate } from '../contexts/PwaUpdateContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import { SignatureHTMLEditor } from '../components/signature/SignatureHTMLEditor';
 import { applyScaleToHTML } from '../utils/signatureScaler';
 
@@ -242,6 +243,18 @@ const Configuracion = () => {
   const { folders, addFolder, deleteFolder, rules, addRule, deleteRule, emailsPerPage, setEmailsPerPage } = useEmails();
   const { showToast } = useToast();
   const { setSafetyState } = usePwaUpdate();
+
+  // Destructurar el proveedor de notificaciones push
+  const {
+    token,
+    permission,
+    isCompatible,
+    preferences: notifPreferences,
+    requestPermission,
+    disableNotifications,
+    sendTestNotification,
+    updatePreferences: notifUpdatePreferences
+  } = useNotifications();
 
   // Custom context de firmas
   const {
@@ -1997,6 +2010,235 @@ const Configuracion = () => {
           </Box>
         );
 
+      case 'notificaciones': {
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5, fontSize: '15px' }}>
+              Configuración de Notificaciones Push
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Mantente al tanto de tus correos en tiempo real mediante notificaciones push de Firebase.
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+
+            {/* ESTADO DE NOTIFICACIONES */}
+            <Card variant="outlined" sx={{ borderRadius: '12px', p: 2.5, mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1.0 }}>
+                Estado del Dispositivo
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.0 }}>
+                  <Typography variant="body2">Soporte del Navegador:</Typography>
+                  <Chip
+                    label={isCompatible ? "Soportado" : "No Compatible"}
+                    color={isCompatible ? "success" : "error"}
+                    size="small"
+                  />
+                </Box>
+                <Divider />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.0 }}>
+                  <Typography variant="body2">Permiso de Notificaciones:</Typography>
+                  <Chip
+                    label={permission === 'granted' ? "Activado" : permission === 'denied' ? "Bloqueado" : "No Solicitado"}
+                    color={permission === 'granted' ? "success" : permission === 'denied' ? "error" : "warning"}
+                    size="small"
+                  />
+                </Box>
+                <Divider />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.0 }}>
+                  <Typography variant="body2">Registro del Token:</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: { xs: '180px', sm: '320px' } }}>
+                    {token ? `${token.substring(0, 20)}...` : 'No Registrado'}
+                  </Typography>
+                </Box>
+
+                {permission === 'denied' && (
+                  <Box sx={{ mt: 1.0, p: 1.5, bgcolor: 'error.light', borderRadius: '8px', border: '1px solid', borderColor: 'error.main' }}>
+                    <Typography variant="caption" color="error.dark" sx={{ fontWeight: 'bold', display: 'block', mb: 0.5 }}>
+                      ⚠️ Las notificaciones están bloqueadas en tu navegador
+                    </Typography>
+                    <Typography variant="caption" color="error.dark" sx={{ display: 'block' }}>
+                      Para activarlas, por favor toca el icono del candado o la configuración del sitio a la izquierda de la barra de direcciones de Chrome/Safari y cambia el permiso de Notificaciones a "Permitir".
+                    </Typography>
+                  </Box>
+                )}
+
+                <Box sx={{ mt: 1.5, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                  {permission !== 'granted' && permission !== 'denied' && (
+                    <Button
+                      variant="contained"
+                      onClick={requestPermission}
+                      startIcon={<NotificationsIcon />}
+                      sx={{ textTransform: 'none', fontWeight: 'bold' }}
+                    >
+                      Activar notificaciones
+                    </Button>
+                  )}
+                  {permission === 'granted' && token && (
+                    <>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        onClick={disableNotifications}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        Desactivar notificaciones en este dispositivo
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={sendTestNotification}
+                        sx={{ textTransform: 'none', fontWeight: 'bold' }}
+                      >
+                        Enviar notificación de prueba
+                      </Button>
+                    </>
+                  )}
+                </Box>
+              </Box>
+            </Card>
+
+            {/* PREFERENCIAS DE NOTIFICACIÓN */}
+            {permission === 'granted' && notifPreferences && (
+              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: '12px', border: '1px solid divider', bgcolor: 'background.paper' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2 }}>
+                  Preferencias de Notificaciones
+                </Typography>
+                <FormGroup sx={{ gap: 2 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={notifPreferences.enabled}
+                        onChange={(e) => notifUpdatePreferences({ enabled: e.target.checked })}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Notificaciones Push Activas</Typography>
+                        <Typography variant="caption" color="text.secondary">Habilita o deshabilita globalmente el envío de notificaciones.</Typography>
+                      </Box>
+                    }
+                  />
+                  <Divider />
+
+                  <FormControlLabel
+                    disabled={!notifPreferences.enabled}
+                    control={
+                      <Switch
+                        checked={notifPreferences.inboundEmail}
+                        onChange={(e) => notifUpdatePreferences({ inboundEmail: e.target.checked })}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Correos Recibidos</Typography>
+                        <Typography variant="caption" color="text.secondary">Notificarme al recibir un nuevo correo electrónico.</Typography>
+                      </Box>
+                    }
+                  />
+
+                  <FormControlLabel
+                    disabled={!notifPreferences.enabled}
+                    control={
+                      <Switch
+                        checked={notifPreferences.outboundSuccess}
+                        onChange={(e) => notifUpdatePreferences({ outboundSuccess: e.target.checked })}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Envíos Exitosos</Typography>
+                        <Typography variant="caption" color="text.secondary">Notificarme cuando un correo se envíe de manera correcta.</Typography>
+                      </Box>
+                    }
+                  />
+
+                  <FormControlLabel
+                    disabled={!notifPreferences.enabled}
+                    control={
+                      <Switch
+                        checked={notifPreferences.outboundError}
+                        onChange={(e) => notifUpdatePreferences({ outboundError: e.target.checked })}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Errores de Envío</Typography>
+                        <Typography variant="caption" color="text.secondary">Notificarme con una alerta persistente si falla el envío de un correo.</Typography>
+                      </Box>
+                    }
+                  />
+                  <Divider />
+
+                  <FormControlLabel
+                    disabled={!notifPreferences.enabled}
+                    control={
+                      <Switch
+                        checked={notifPreferences.showSender}
+                        onChange={(e) => notifUpdatePreferences({ showSender: e.target.checked })}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Mostrar Remitente</Typography>
+                        <Typography variant="caption" color="text.secondary">Mostrar nombre y dirección del remitente en la pantalla de bloqueo.</Typography>
+                      </Box>
+                    }
+                  />
+
+                  <FormControlLabel
+                    disabled={!notifPreferences.enabled}
+                    control={
+                      <Switch
+                        checked={notifPreferences.showSubject}
+                        onChange={(e) => notifUpdatePreferences({ showSubject: e.target.checked })}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Mostrar Asunto</Typography>
+                        <Typography variant="caption" color="text.secondary">Mostrar el título del asunto del correo en el aviso push.</Typography>
+                      </Box>
+                    }
+                  />
+                  <Divider />
+
+                  <FormControlLabel
+                    disabled={!notifPreferences.enabled}
+                    control={
+                      <Switch
+                        checked={notifPreferences.sound}
+                        onChange={(e) => notifUpdatePreferences({ sound: e.target.checked })}
+                        color="primary"
+                      />
+                    }
+                    label="Reproducir sonido de notificación"
+                  />
+
+                  <FormControlLabel
+                    disabled={!notifPreferences.enabled}
+                    control={
+                      <Switch
+                        checked={notifPreferences.vibration}
+                        onChange={(e) => notifUpdatePreferences({ vibration: e.target.checked })}
+                        color="primary"
+                      />
+                    }
+                    label="Vibración de alerta push"
+                  />
+                </FormGroup>
+              </Paper>
+            )}
+          </Box>
+        );
+      }
+
       case 'general':
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -2049,7 +2291,7 @@ const Configuracion = () => {
                   <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                     Versión actual de Pixel Mail
                   </Typography>
-                  <Chip label="v9.6" color="primary" size="small" sx={{ fontWeight: 'bold', fontSize: '11px' }} />
+                  <Chip label="v9.7" color="primary" size="small" sx={{ fontWeight: 'bold', fontSize: '11px' }} />
                 </Box>
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

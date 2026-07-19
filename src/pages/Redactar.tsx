@@ -29,8 +29,6 @@ import { useToast } from '../contexts/ToastContext';
 import Editor from '../components/Editor';
 import AttachmentManager from '../components/AttachmentManager';
 import type { AttachmentItem } from '../components/AttachmentManager';
-import { db } from '../config/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Send as SendIcon, SignLanguage as SignatureIcon, Edit as EditIcon, Delete as DeleteIcon, OpenInNew as OpenIcon } from '@mui/icons-material';
 import type { Signature } from '../contexts/SignatureContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -484,22 +482,7 @@ const Redactar = () => {
       }
 
       console.log('[RESEND] success');
-
-      // Guardar en Firestore usando finalHtml
-      await addDoc(collection(db, 'emails'), {
-        userId: user.uid,
-        from: user.email,
-        to,
-        cc: cc || null,
-        bcc: bcc || null,
-        subject,
-        body: finalHtml,
-        signatureApplied: addSignature,
-        status: 'sent',
-        attachments: attachments.map(f => ({ name: f.name, size: f.size })),
-        createdAt: serverTimestamp()
-      });
-      console.log('[FIRESTORE] email saved');
+      console.log('[FIRESTORE] email saved in backend');
 
       setSuccess(true);
       setTo('');

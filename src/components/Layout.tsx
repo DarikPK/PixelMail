@@ -633,7 +633,7 @@ const Layout = () => {
 
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '10.5px', display: { xs: 'none', md: 'block' } }}>
-            versión 9.6
+            versión 9.7
           </Typography>
 
           <Tooltip title={mode === 'dark' ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}>

@@ -6,6 +6,7 @@ import { EmailProvider } from './contexts/EmailContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { SignatureProvider } from './contexts/SignatureContext';
 import { PwaUpdateProvider } from './contexts/PwaUpdateContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -24,20 +25,22 @@ function App() {
           <EmailProvider>
             <SignatureProvider>
               <PwaUpdateProvider>
-                <Router>
-                  <Routes>
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/" element={<Layout />}>
-                      <Route index element={<Navigate to="/recibidos" replace />} />
-                      <Route path="recibidos" element={<ProtectedRoute><Recibidos /></ProtectedRoute>} />
-                      <Route path="redactar" element={<ProtectedRoute><Redactar /></ProtectedRoute>} />
-                      <Route path="enviados" element={<ProtectedRoute><Enviados /></ProtectedRoute>} />
-                      <Route path="configuracion" element={<ProtectedRoute><Configuracion /></ProtectedRoute>} />
-                    </Route>
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Router>
-                <ReloadPrompt />
+                <NotificationProvider>
+                  <Router>
+                    <Routes>
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/" element={<Layout />}>
+                        <Route index element={<Navigate to="/recibidos" replace />} />
+                        <Route path="recibidos" element={<ProtectedRoute><Recibidos /></ProtectedRoute>} />
+                        <Route path="redactar" element={<ProtectedRoute><Redactar /></ProtectedRoute>} />
+                        <Route path="enviados" element={<ProtectedRoute><Enviados /></ProtectedRoute>} />
+                        <Route path="configuracion" element={<ProtectedRoute><Configuracion /></ProtectedRoute>} />
+                      </Route>
+                      <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                  </Router>
+                  <ReloadPrompt />
+                </NotificationProvider>
               </PwaUpdateProvider>
             </SignatureProvider>
           </EmailProvider>
