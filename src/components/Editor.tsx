@@ -241,10 +241,10 @@ const Editor = ({ content, onChange }: EditorProps) => {
   }, [content, editor]);
 
   return (
-    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mt: 2, mb: 1, minHeight: 300 }}>
+    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mt: 2, mb: 1, minHeight: 300, width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden' }}>
       <MenuBar editor={editor} />
-      <Box sx={{ p: 2, '& .ProseMirror': { outline: 'none', minHeight: 250 } }}>
-        <EditorContent editor={editor} />
+      <Box sx={{ p: { xs: 1, sm: 2 }, '& .ProseMirror': { outline: 'none', minHeight: 250, wordBreak: 'break-word', overflowWrap: 'anywhere' }, width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+        <EditorContent editor={editor} style={{ width: '100%', maxWidth: '100%', minWidth: 0 }} />
       </Box>
     </Box>
   );

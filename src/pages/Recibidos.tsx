@@ -543,7 +543,7 @@ const Recibidos = () => {
 
       {/* Pestañas de la Bandeja (Recibidos + Carpetas) - Ocultar en la Papelera, Deslizables Horizontalmente en Móvil */}
       {activeNav !== 'eliminados' && (
-        <Box sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ borderBottom: '1px solid', borderColor: 'divider', width: '100%', maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}>
           <Tabs
             value={currentTabValue}
             onChange={handleTabChange}
@@ -552,10 +552,17 @@ const Recibidos = () => {
             allowScrollButtonsMobile
             sx={{
               minHeight: '34px',
+              width: '100%',
+              maxWidth: '100%',
+              minWidth: 0,
               '& .MuiTabs-indicator': {
                 height: '2.5px',
                 bgcolor: '#3B82F6',
                 borderRadius: '2px 2px 0 0'
+              },
+              '& .MuiTabs-scroller': {
+                overflowX: 'auto !important',
+                scrollbarWidth: 'none'
               }
             }}
           >
@@ -938,6 +945,10 @@ const Recibidos = () => {
                       display: 'flex',
                       alignItems: 'center',
                       mb: 0.4,
+                      width: '100%',
+                      maxWidth: '100%',
+                      minWidth: 0,
+                      boxSizing: 'border-box',
                       '&:hover': {
                         bgcolor: 'action.hover',
                         borderColor: 'text.secondary',
@@ -947,7 +958,10 @@ const Recibidos = () => {
                   >
                     <CardContent sx={{
                       p: { xs: '10px 12px !important', md: '0px 12px !important' },
-                      width: '100%'
+                      width: '100%',
+                      maxWidth: '100%',
+                      minWidth: 0,
+                      boxSizing: 'border-box'
                     }}>
                       {/* VISTA MÓVIL (xs a md) - Rediseñada para sentirse 100% nativa con gestos simulados */}
                       <Box sx={{

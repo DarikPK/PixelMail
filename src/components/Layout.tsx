@@ -633,7 +633,7 @@ const Layout = () => {
 
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '10.5px', display: { xs: 'none', md: 'block' } }}>
-            versión 9.5
+            versión 9.6
           </Typography>
 
           <Tooltip title={mode === 'dark' ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}>
@@ -665,7 +665,7 @@ const Layout = () => {
   );
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: mode === 'dark' ? '#0F1117' : '#F4F7FB' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: mode === 'dark' ? '#0F1117' : '#F4F7FB', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box', overflowX: 'clip' }}>
       {/* Barra superior (AppBar) de 56px de alto */}
       <AppBar
         position="fixed"
@@ -867,7 +867,11 @@ const Layout = () => {
           pb: { xs: 'calc(12px + env(safe-area-inset-bottom))', md: 2.5 },
           pl: { xs: 'calc(12px + env(safe-area-inset-left))', md: 2.5 },
           pr: { xs: 'calc(12px + env(safe-area-inset-right))', md: 2.5 },
-          width: { md: `calc(100% - ${drawerWidth}px)` },
+          width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
+          maxWidth: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box',
+          overflowX: 'clip',
           mt: '56px',
           bgcolor: mode === 'dark' ? '#0F1117' : '#F4F7FB',
           minHeight: 'calc(100vh - 56px)',
@@ -876,7 +880,7 @@ const Layout = () => {
           position: 'relative'
         }}
       >
-        <Box sx={{ width: '100%', maxWidth: '100%', flexGrow: 1, position: 'relative', minHeight: '100%' }}>
+        <Box sx={{ width: '100%', maxWidth: '100%', minWidth: 0, flexGrow: 1, position: 'relative', minHeight: '100%', boxSizing: 'border-box' }}>
           {!isOnline && (
             <Box
               sx={{

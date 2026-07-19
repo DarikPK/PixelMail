@@ -64,7 +64,7 @@ body,
   min-width: 0;
   margin: 0;
   padding: 0;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 #root {
@@ -72,6 +72,13 @@ body,
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 h1,
