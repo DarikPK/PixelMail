@@ -144,10 +144,12 @@ const Recibidos = () => {
     bulkToggleRead,
     bulkMoveToTrash,
     bulkDeleteForever,
-    bulkRestore
+    bulkRestore,
+    emailsPerPage
   } = useEmails();
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [emptying, setEmptying] = useState(false);
+  const [page, setPage] = useState(1);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const openParam = searchParams.get('open');
@@ -158,6 +160,11 @@ const Recibidos = () => {
 
   // Sub-pestaña para la papelera de reciclaje: 0 para recibidos, 1 para enviados
   const [trashSubTab, setTrashSubTab] = useState(0);
+
+  // Reiniciar a la página 1 cuando cambie la carpeta, filtro, categoría, pestaña o cantidad por página
+  useEffect(() => {
+    setPage(1);
+  }, [activeNav, activeFolderId, trashSubTab, emailsPerPage]);
 
   // Resetear la sub-pestaña al cambiar de sección
   useEffect(() => {
@@ -385,6 +392,15 @@ const Recibidos = () => {
     }
     return list;
   }, [visibleEmails, activeNav]);
+
+  // Calcular la paginación de correos
+  const totalEmailsCount = sortedEmails.length;
+  const totalPages = Math.ceil(totalEmailsCount / emailsPerPage) || 1;
+  const startIndex = (page - 1) * emailsPerPage;
+  const endIndex = Math.min(startIndex + emailsPerPage, totalEmailsCount);
+  const paginatedEmails = useMemo(() => {
+    return sortedEmails.slice(startIndex, endIndex);
+  }, [sortedEmails, startIndex, endIndex]);
 
   // Contadores internos de la papelera
   const trashReceivedCount = useMemo(() => {
@@ -823,7 +839,7 @@ const Recibidos = () => {
         ) : (
           (() => {
             // Diagnóstico temporal requerido por el usuario
-            const sentTrashEmails = activeNav === 'eliminados' && trashSubTab === 1 ? sortedEmails : null;
+            const sentTrashEmails = activeNav === 'eliminados' && trashSubTab === 1 ? paginatedEmails : null;
             if (sentTrashEmails) {
               console.log("[TRASH SENT] total:", (sentTrashEmails ?? [])?.length);
               console.table(
@@ -844,7 +860,7 @@ const Recibidos = () => {
               );
             }
 
-            return (sortedEmails ?? []).map((email: EmailData) => {
+            return (paginatedEmails ?? []).map((email: EmailData) => {
               if (activeNav === 'eliminados' && trashSubTab === 1) {
                 if (!email) {
                   console.error("[TRASH SENT] elemento undefined o null");
@@ -1107,6 +1123,69 @@ const Recibidos = () => {
           })()
         )}
       </Box>
+
+      {/* Controles de Paginación Compactos */}
+      {sortedEmails.length > 0 && (
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          py: 1.5,
+          px: 1.0,
+          mt: 1.5,
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          flexWrap: 'wrap',
+          gap: 1.5
+        }}>
+          {/* Indicador de Rango (ej. 1-20 de 234) */}
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '12px' }}>
+            {startIndex + 1}–{endIndex} de {totalEmailsCount}
+          </Typography>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.0 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 'bold',
+                fontSize: '11.5px',
+                py: 0.6,
+                px: 1.8,
+                borderRadius: '8px',
+                minHeight: '36px'
+              }}
+            >
+              Anterior
+            </Button>
+
+            <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 'bold', fontSize: '12.5px' }}>
+              Página {page} de {totalPages}
+            </Typography>
+
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 'bold',
+                fontSize: '11.5px',
+                py: 0.6,
+                px: 1.8,
+                borderRadius: '8px',
+                minHeight: '36px'
+              }}
+            >
+              Siguiente
+            </Button>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 };

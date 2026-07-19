@@ -239,7 +239,7 @@ const getDavidSignatureTemplate = (): Row[] => [
 
 const Configuracion = () => {
   const { user } = useAuth();
-  const { folders, addFolder, deleteFolder, rules, addRule, deleteRule } = useEmails();
+  const { folders, addFolder, deleteFolder, rules, addRule, deleteRule, emailsPerPage, setEmailsPerPage } = useEmails();
   const { showToast } = useToast();
   const { setSafetyState } = usePwaUpdate();
 
@@ -1994,6 +1994,41 @@ const Configuracion = () => {
                 })
               )}
             </Box>
+          </Box>
+        );
+
+      case 'general':
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5, fontSize: '15px' }}>
+              Configuración General
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Personaliza tu experiencia de lectura y organización de Pixel Mail.
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+
+            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: '12px', border: '1px solid divider', bgcolor: 'background.paper' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                Cantidad de correos por página
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                Define cuántos correos se muestran en cada página de la bandeja.
+              </Typography>
+
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <Select
+                  value={emailsPerPage}
+                  onChange={(e) => setEmailsPerPage(Number(e.target.value))}
+                  sx={{ fontSize: '13px' }}
+                >
+                  <MenuItem value={10} sx={{ fontSize: '13px' }}>10 correos</MenuItem>
+                  <MenuItem value={20} sx={{ fontSize: '13px' }}>20 correos</MenuItem>
+                  <MenuItem value={30} sx={{ fontSize: '13px' }}>30 correos</MenuItem>
+                  <MenuItem value={40} sx={{ fontSize: '13px' }}>40 correos</MenuItem>
+                </Select>
+              </FormControl>
+            </Paper>
           </Box>
         );
 
