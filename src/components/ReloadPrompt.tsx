@@ -7,14 +7,25 @@ import {
 } from '@mui/material';
 import { Info as InfoIcon, CheckCircle as SuccessIcon } from '@mui/icons-material';
 
+import { useState, useEffect } from 'react';
+
 const ReloadPrompt = () => {
   const { updatePending, showSuccessToast, setShowSuccessToast } = usePwaUpdate();
+  const [showPending, setShowPending] = useState(false);
+
+  useEffect(() => {
+    if (updatePending) {
+      setShowPending(true);
+    }
+  }, [updatePending]);
 
   return (
     <>
-      {/* Aviso discreto no interactivo cuando la actualización está pospuesta */}
+      {/* Aviso discreto no interactivo cuando la actualización está pospuesta, ocultándose tras 4 segundos */}
       <Snackbar
-        open={updatePending}
+        open={showPending}
+        autoHideDuration={4000}
+        onClose={() => setShowPending(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
         <Alert
