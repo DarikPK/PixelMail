@@ -62,6 +62,7 @@ import { useEmails } from '../contexts/EmailContext';
 import type { Signature } from '../contexts/SignatureContext';
 import { useSignatures } from '../contexts/SignatureContext';
 import { useToast } from '../contexts/ToastContext';
+import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 import { SignatureHTMLEditor } from '../components/signature/SignatureHTMLEditor';
 import { applyScaleToHTML } from '../utils/signatureScaler';
 
@@ -240,6 +241,7 @@ const Configuracion = () => {
   const { user } = useAuth();
   const { folders, addFolder, deleteFolder, rules, addRule, deleteRule } = useEmails();
   const { showToast } = useToast();
+  const { setSafetyState } = usePwaUpdate();
 
   // Custom context de firmas
   const {
@@ -260,6 +262,15 @@ const Configuracion = () => {
 
   // Navigation sidebar interna
   const [activeSection, setActiveSection] = useState<'general' | 'cuenta' | 'firma' | 'firmas' | 'reglas' | 'carpetas' | 'apariencia' | 'notificaciones' | 'seguridad' | 'acerca'>('firma');
+
+  // Sincronizar el estado de edición de firmas con el contexto de PWA Update
+  useEffect(() => {
+    const isEditing = activeSection === 'firma' || activeSection === 'firmas';
+    setSafetyState({ isSignatureEditing: isEditing });
+    return () => {
+      setSafetyState({ isSignatureEditing: false, hasUnsavedChanges: false });
+    };
+  }, [activeSection]);
 
   // Firma visual / builder state
   const [rows, setRows] = useState<Row[]>([]);
@@ -739,6 +750,12 @@ const Configuracion = () => {
   const [conditionField, setConditionField] = useState<'from' | 'subject' | 'hasAttachments' | 'read' | 'starred'>('from');
   const [conditionOperator, setConditionOperator] = useState<'contains' | 'endsWith' | 'equals' | 'startsWith' | 'isTrue' | 'isFalse'>('contains');
   const [conditionValue, setConditionValue] = useState('');
+
+  // Sincronizar cambios sin guardar en los inputs de formularios
+  useEffect(() => {
+    const hasUnsavedInputs = Boolean(newFolderName.trim() || conditionValue.trim());
+    setSafetyState({ hasUnsavedChanges: hasUnsavedInputs });
+  }, [newFolderName, conditionValue]);
   const [actionType, setActionType] = useState<'moveToFolder' | 'archive' | 'delete' | 'star' | 'markRead'>('moveToFolder');
   const [actionValue, setActionValue] = useState('');
 

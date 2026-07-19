@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt', // Usar prompt para poder mostrar la notificación de actualizar de manera controlada y discreta
+      registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
         name: 'Pixel Mail',
@@ -47,6 +47,9 @@ export default defineConfig({
         ]
       },
       workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         // Excluimos explícitamente llamadas privadas o dinámicas
         navigateFallbackDenylist: [
           /^\/__/, // Rutas internas de Firebase
@@ -66,14 +69,6 @@ export default defineConfig({
                 maxEntries: 50,
                 maxAgeSeconds: 30 * 24 * 60 * 60, // 30 días
               },
-            },
-          },
-          {
-            // StaleWhileRevalidate para JS y CSS estáticos no en precaché, y rutas internas del shell
-            urlPattern: /\.(?:js|css)$/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'pixelmail-static-cache',
             },
           },
           {

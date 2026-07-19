@@ -1,95 +1,82 @@
-import { useState, useEffect } from 'react';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 import {
   Snackbar,
-  Button,
-  Box,
-  Typography
+  Alert,
+  Typography,
+  Box
 } from '@mui/material';
-import { Refresh as RefreshIcon } from '@mui/icons-material';
+import { Info as InfoIcon, CheckCircle as SuccessIcon } from '@mui/icons-material';
 
 const ReloadPrompt = () => {
-  const {
-    needRefresh: [needRefresh],
-    updateServiceWorker,
-  } = useRegisterSW({
-    onRegistered(r: ServiceWorkerRegistration | undefined) {
-      console.log('[SW] Service Worker registrado exitosamente:', r);
-    },
-    onRegisterError(error: any) {
-      console.error('[SW] Error al registrar el Service Worker:', error);
-    },
-  });
-
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (needRefresh) {
-      setOpen(true);
-    }
-  }, [needRefresh]);
-
-  const handleClose = () => {
-    setOpen(false);
-  };
-
-  const handleUpdate = () => {
-    updateServiceWorker(true);
-    setOpen(false);
-  };
+  const { updatePending, showSuccessToast, setShowSuccessToast } = usePwaUpdate();
 
   return (
-    <Snackbar
-      open={open}
-      autoHideDuration={null}
-      onClose={handleClose}
-      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-    >
-      <Box
-        sx={{
-          bgcolor: 'background.paper',
-          color: 'text.primary',
-          p: 2,
-          borderRadius: '12px',
-          border: '1px solid',
-          borderColor: 'primary.main',
-          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 1.5,
-          maxWidth: 320
-        }}
+    <>
+      {/* Aviso discreto no interactivo cuando la actualización está pospuesta */}
+      <Snackbar
+        open={updatePending}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
-        <Box>
-          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-            Nueva versión disponible
+        <Alert
+          severity="info"
+          icon={<InfoIcon sx={{ fontSize: '18px', color: '#3B82F6' }} />}
+          sx={{
+            borderRadius: '12px',
+            bgcolor: '#1E293B',
+            color: '#FFFFFF',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.25)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            py: 0.5,
+            px: 1.5,
+            '& .MuiAlert-message': {
+              py: 0.2
+            }
+          }}
+        >
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '12.5px', lineHeight: 1.2 }}>
+              Nueva versión lista
+            </Typography>
+            <Typography variant="caption" sx={{ opacity: 0.85, fontSize: '10.5px', display: 'block' }}>
+              Se aplicará automáticamente al terminar tu redacción o cambios.
+            </Typography>
+          </Box>
+        </Alert>
+      </Snackbar>
+
+      {/* Aviso discreto de actualización exitosa */}
+      <Snackbar
+        open={showSuccessToast}
+        autoHideDuration={4000}
+        onClose={() => setShowSuccessToast(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="success"
+          icon={<SuccessIcon sx={{ color: '#10B981', fontSize: '18px' }} />}
+          sx={{
+            borderRadius: '12px',
+            bgcolor: '#131722',
+            color: '#FFFFFF',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            py: 0.5,
+            px: 1.5,
+            '& .MuiAlert-message': {
+              py: 0.2
+            }
+          }}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '12.5px' }}>
+            Pixel Mail se actualizó correctamente.
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Hay cambios y optimizaciones en Pixel Mail listos para ti.
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-          <Button
-            size="small"
-            variant="text"
-            onClick={handleClose}
-            sx={{ color: 'text.secondary', textTransform: 'none', fontSize: '12px' }}
-          >
-            Descartar
-          </Button>
-          <Button
-            size="small"
-            variant="contained"
-            color="primary"
-            startIcon={<RefreshIcon sx={{ fontSize: '14px' }} />}
-            onClick={handleUpdate}
-            sx={{ textTransform: 'none', fontSize: '12px', fontWeight: 'bold' }}
-          >
-            Actualizar
-          </Button>
-        </Box>
-      </Box>
-    </Snackbar>
+        </Alert>
+      </Snackbar>
+    </>
   );
 };
 

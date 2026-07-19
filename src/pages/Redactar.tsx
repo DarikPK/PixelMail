@@ -35,6 +35,7 @@ import { Send as SendIcon, SignLanguage as SignatureIcon, Edit as EditIcon, Dele
 import type { Signature } from '../contexts/SignatureContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { applyScaleToHTML } from '../utils/signatureScaler';
+import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 
 // Helpers para manipulación de firma en HTML
 const removeSignatureFromHTML = (html: string): string => {
@@ -114,8 +115,17 @@ const Redactar = () => {
   const { emails } = useEmails();
   const { signatures, activeSignature, activeSignatureId, activateSignature, preferences } = useSignatures();
   const { showToast } = useToast();
+  const { setSafetyState } = usePwaUpdate();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // Registrar estado de redacción (isComposing) en el contexto de PWA Update
+  useEffect(() => {
+    setSafetyState({ isComposing: true });
+    return () => {
+      setSafetyState({ isComposing: false, isUploading: false, isSending: false, isSavingDraft: false });
+    };
+  }, []);
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -149,6 +159,11 @@ const Redactar = () => {
   const [success, setSuccess] = useState(false);
   const [sending, setSending] = useState(false);
   const [pendingAssetsDialogOpen, setPendingAssetsDialogOpen] = useState(false);
+
+  // Sincronizar el estado de envío con el contexto de PWA Update
+  useEffect(() => {
+    setSafetyState({ isSending: sending });
+  }, [sending]);
 
   // Nombre de la firma insertada actualmente
   const insertedSignatureName = useMemo(() => {
