@@ -5,6 +5,7 @@ import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
+import { isRunningAsPWA } from '../utils/pwaHelper';
 
 export interface UserNotificationPreferences {
   enabled: boolean;
@@ -69,10 +70,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const deviceId = getOrCreateDeviceId();
 
-  // Validar compatibilidad al cargar
+  // Validar compatibilidad al cargar (excluyendo no-PWA de forma estricta)
   useEffect(() => {
     isSupported().then((supported) => {
-      setIsCompatible(supported && 'Notification' in window);
+      const isAppMode = isRunningAsPWA();
+      setIsCompatible(supported && 'Notification' in window && isAppMode);
       setLoading(false);
     });
   }, []);

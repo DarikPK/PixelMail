@@ -64,8 +64,10 @@ import { useSignatures } from '../contexts/SignatureContext';
 import { useToast } from '../contexts/ToastContext';
 import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 import { useNotifications } from '../contexts/NotificationContext';
+import { useCustomTheme } from '../contexts/ThemeContext';
 import { SignatureHTMLEditor } from '../components/signature/SignatureHTMLEditor';
 import { applyScaleToHTML } from '../utils/signatureScaler';
+import { isRunningAsPWA } from '../utils/pwaHelper';
 
 const PREDEFINED_COLORS = [
   '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#6366F1'
@@ -243,6 +245,7 @@ const Configuracion = () => {
   const { folders, addFolder, deleteFolder, rules, addRule, deleteRule, emailsPerPage, setEmailsPerPage } = useEmails();
   const { showToast } = useToast();
   const { setSafetyState } = usePwaUpdate();
+  const { mode } = useCustomTheme();
 
   // Destructurar el proveedor de notificaciones push
   const {
@@ -2291,7 +2294,7 @@ const Configuracion = () => {
                   <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                     Versión actual de Pixel Mail
                   </Typography>
-                  <Chip label="v9.7" color="primary" size="small" sx={{ fontWeight: 'bold', fontSize: '11px' }} />
+                  <Chip label="v9.8" color="primary" size="small" sx={{ fontWeight: 'bold', fontSize: '11px' }} />
                 </Box>
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2349,7 +2352,7 @@ const Configuracion = () => {
               { id: 'general', label: 'General', icon: <SettingsIcon /> },
               { id: 'cuenta', label: 'Cuenta', icon: <AccountIcon /> },
               { id: 'apariencia', label: 'Apariencia', icon: <AppearanceIcon /> },
-              { id: 'notificaciones', label: 'Notificaciones', icon: <NotificationsIcon /> },
+              ...(isRunningAsPWA() ? [{ id: 'notificaciones', label: 'Notificaciones', icon: <NotificationsIcon /> }] : []),
               { id: 'seguridad', label: 'Seguridad', icon: <SecurityIcon /> },
               { id: 'acerca', label: 'Acerca de', icon: <SettingsIcon /> }
             ].map((section) => {
@@ -2384,8 +2387,55 @@ const Configuracion = () => {
           </List>
         </Box>
 
-        <Box sx={{ flexGrow: 1, p: 2.5, minWidth: 0, overflowY: 'auto' }}>
-          {renderSectionContent()}
+        <Box sx={{ flexGrow: 1, p: 2.5, minWidth: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ flexGrow: 1 }}>
+            {renderSectionContent()}
+          </Box>
+
+          {/* Banner informativo de instalación en PWA al final de configuración si no está instalada */}
+          {!isRunningAsPWA() && (
+            <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2.0,
+                  borderRadius: '12px',
+                  borderColor: '#3B82F6',
+                  bgcolor: mode === 'dark' ? 'rgba(59, 130, 246, 0.05)' : 'rgba(59, 130, 246, 0.02)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1.0
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1.0, fontSize: '13px' }}>
+                  <NotificationsIcon sx={{ fontSize: '18px' }} />
+                  Notificaciones push disponibles en la App
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '11px', lineHeight: 1.3 }}>
+                  Las notificaciones push están disponibles únicamente cuando Pixel Mail está instalado como aplicación en este dispositivo.
+                </Typography>
+
+                <Box sx={{ mt: 1.0 }}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={() => {
+                      const installBtn = document.querySelector('[aria-label="Instalar Pixel Mail"]');
+                      if (installBtn) {
+                        (installBtn as any).click();
+                      } else {
+                        alert("Instrucciones de Instalación:\n\n1. Chrome/Android: Toca los tres puntos de opciones arriba a la derecha y selecciona 'Instalar aplicación' o 'Agregar a la pantalla de inicio'.\n\n2. Safari/iOS: Toca el botón Compartir y selecciona 'Agregar a pantalla de inicio'.");
+                      }
+                    }}
+                    startIcon={<NotificationsIcon sx={{ fontSize: '15px' }} />}
+                    sx={{ textTransform: 'none', fontWeight: 'bold', background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)', height: '32px', fontSize: '11px' }}
+                  >
+                    Instalar Pixel Mail
+                  </Button>
+                </Box>
+              </Paper>
+            </Box>
+          )}
         </Box>
       </Paper>
 
