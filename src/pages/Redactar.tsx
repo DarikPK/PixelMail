@@ -15,8 +15,6 @@ import {
   Divider,
   Menu,
   MenuItem,
-  Card,
-  CardContent,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -29,7 +27,7 @@ import { useToast } from '../contexts/ToastContext';
 import Editor from '../components/Editor';
 import AttachmentManager from '../components/AttachmentManager';
 import type { AttachmentItem } from '../components/AttachmentManager';
-import { Send as SendIcon, SignLanguage as SignatureIcon, Edit as EditIcon, Delete as DeleteIcon, OpenInNew as OpenIcon } from '@mui/icons-material';
+import { Send as SendIcon, OpenInNew as OpenIcon } from '@mui/icons-material';
 import type { Signature } from '../contexts/SignatureContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { applyScaleToHTML } from '../utils/signatureScaler';
@@ -751,52 +749,6 @@ const Redactar = () => {
           />
         )}
 
-        {/* DETECTAR Y CONTROLAR FIRMA BLOQUEADA EN LA INTERFAZ */}
-        {addSignature && insertedSignatureId && (
-          <Card variant="outlined" sx={{ mt: 2, mb: 1, borderColor: '#10B981', bgcolor: 'rgba(16, 185, 129, 0.04)' }}>
-            <CardContent sx={{ py: '12px !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#10B981', fontSize: '12.5px' }}>
-                  Firma: {insertedSignatureName} [Bloqueada contra edición accidental]
-                </Typography>
-                <Typography variant="caption" sx={{ color: '#B8C1D1', fontSize: '11px' }}>
-                  La firma se ha insertado al final del mensaje y se enviará en formato HTML completo.
-                </Typography>
-              </Box>
-
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={(e) => setSignatureMenuAnchor(e.currentTarget)}
-                  startIcon={<SignatureIcon />}
-                  sx={{ textTransform: 'none', fontSize: '11px', color: '#10B981', borderColor: '#10B981', '&:hover': { borderColor: '#059669' } }}
-                >
-                  Cambiar firma
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => navigate('/configuracion')}
-                  startIcon={<EditIcon />}
-                  sx={{ textTransform: 'none', fontSize: '11px', color: '#3B82F6', borderColor: '#3B82F6', '&:hover': { borderColor: '#2563EB' } }}
-                >
-                  Editar en Configuración
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="error"
-                  onClick={() => handleToggleSignature(false)}
-                  startIcon={<DeleteIcon />}
-                  sx={{ textTransform: 'none', fontSize: '11px' }}
-                >
-                  Quitar de este correo
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
-        )}
 
         <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', my: 3 }} />
 
