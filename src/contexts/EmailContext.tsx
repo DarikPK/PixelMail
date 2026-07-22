@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { db } from '../config/firebase';
-import { collection, query, where, onSnapshot, doc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, writeBatch, updateDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 
 export interface Attachment {
@@ -112,6 +112,10 @@ interface EmailContextType {
 
   // Almacenamiento real
   storageBreakdown: StorageBreakdown;
+
+  // Configuración de paginación
+  emailsPerPage: number;
+  setEmailsPerPage: (val: number) => Promise<void>;
 }
 
 const EmailContext = createContext<EmailContextType | undefined>(undefined);
@@ -207,6 +211,51 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
   const [rawEmails, setRawEmails] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Configuración de paginación con persistencia y validaciones estrictas
+  const [emailsPerPage, setEmailsPerPageRaw] = useState<number>(() => {
+    const saved = localStorage.getItem('pixelmail_emails_per_page');
+    const parsed = parseInt(saved || '20', 10);
+    return [10, 20, 30, 40].includes(parsed) ? parsed : 20;
+  });
+
+  // Suscribirse a las preferencias en Firestore del usuario
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.emailsPerPage !== undefined) {
+          const val = parseInt(data.emailsPerPage, 10);
+          if ([10, 20, 30, 40].includes(val)) {
+            setEmailsPerPageRaw(val);
+            localStorage.setItem('pixelmail_emails_per_page', String(val));
+          }
+        }
+      }
+    }, (error) => {
+      console.error("[EMAIL CONTEXT] Error fetching user config:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user, authLoading]);
+
+  const setEmailsPerPage = async (val: number) => {
+    const validatedVal = [10, 20, 30, 40].includes(val) ? val : 20;
+    setEmailsPerPageRaw(validatedVal);
+    localStorage.setItem('pixelmail_emails_per_page', String(validatedVal));
+    if (user) {
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, { emailsPerPage: validatedVal });
+      } catch (err) {
+        console.error('[EMAIL CONTEXT] Error guardando emailsPerPage en Firestore:', err);
+      }
+    }
+  };
 
   // Selección múltiple
   const [selectedEmailIds, setSelectedEmailIds] = useState<string[]>([]);
@@ -626,7 +675,9 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
         bulkDeleteForever,
         bulkRestore,
         counts,
-        storageBreakdown
+        storageBreakdown,
+        emailsPerPage,
+        setEmailsPerPage
       }}
     >
       {children}

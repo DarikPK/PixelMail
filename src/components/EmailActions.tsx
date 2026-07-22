@@ -44,26 +44,37 @@ const EmailActions = ({
 }: EmailActionsProps) => {
   const navigate = useNavigate();
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, pb: 2, mb: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, pb: 2, mb: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
         <Button
           startIcon={<ArrowBack />}
           onClick={onBack}
           variant="outlined"
-          size="small"
+          sx={{
+            py: { xs: 1.0, sm: 0.6 },
+            px: { xs: 1.8, sm: 1.2 },
+            fontSize: { xs: '13px', sm: '12px' },
+            textTransform: 'none',
+            minHeight: '40px'
+          }}
           aria-label="Volver a la bandeja"
         >
           Volver
         </Button>
-        <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+        <Divider orientation="vertical" flexItem sx={{ mx: 0.5, display: { xs: 'none', sm: 'block' } }} />
 
         {/* Acciones de correo ficticias pero visuales (Responder, Responder a todos, Reenviar) */}
         <Tooltip title="Responder a este correo">
           <Button
             startIcon={<Reply />}
-            size="small"
             onClick={() => emailId && navigate(`/redactar?replyTo=${emailId}`)}
-            sx={{ textTransform: 'none' }}
+            sx={{
+              textTransform: 'none',
+              py: { xs: 1.0, sm: 0.6 },
+              px: { xs: 1.8, sm: 1.2 },
+              fontSize: { xs: '13px', sm: '12px' },
+              minHeight: '40px'
+            }}
           >
             Responder
           </Button>
@@ -71,9 +82,15 @@ const EmailActions = ({
         <Tooltip title="Responder a todos">
           <Button
             startIcon={<ReplyAll />}
-            size="small"
             onClick={() => emailId && navigate(`/redactar?replyTo=${emailId}`)}
-            sx={{ textTransform: 'none', display: { xs: 'none', sm: 'inline-flex' } }}
+            sx={{
+              textTransform: 'none',
+              display: { xs: 'none', sm: 'inline-flex' },
+              py: { xs: 1.0, sm: 0.6 },
+              px: { xs: 1.8, sm: 1.2 },
+              fontSize: { xs: '13px', sm: '12px' },
+              minHeight: '40px'
+            }}
           >
             Responder a todos
           </Button>
@@ -81,23 +98,28 @@ const EmailActions = ({
         <Tooltip title="Reenviar este correo">
           <Button
             startIcon={<Forward />}
-            size="small"
             onClick={() => emailId && navigate(`/redactar?forward=${emailId}`)}
-            sx={{ textTransform: 'none' }}
+            sx={{
+              textTransform: 'none',
+              py: { xs: 1.0, sm: 0.6 },
+              px: { xs: 1.8, sm: 1.2 },
+              fontSize: { xs: '13px', sm: '12px' },
+              minHeight: '40px'
+            }}
           >
             Reenviar
           </Button>
         </Tooltip>
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.0 }}>
         <Tooltip title={read ? "Marcar como no leído" : "Marcar como leído"}>
-          <IconButton onClick={onToggleRead} size="small" color="primary" aria-label="Cambiar estado leído">
+          <IconButton onClick={onToggleRead} sx={{ p: 1.2 }} color="primary" aria-label="Cambiar estado leído">
             {read ? <Mail /> : <Drafts />}
           </IconButton>
         </Tooltip>
         <Tooltip title={starred ? "Quitar destacado" : "Destacar"}>
-          <IconButton onClick={onToggleStar} size="small" color="warning" aria-label="Destacar correo">
+          <IconButton onClick={onToggleStar} sx={{ p: 1.2 }} color="warning" aria-label="Destacar correo">
             {starred ? <Star /> : <StarBorder />}
           </IconButton>
         </Tooltip>
@@ -106,12 +128,12 @@ const EmailActions = ({
         {deleted ? (
           <>
             <Tooltip title="Restaurar">
-              <IconButton onClick={onToggleDelete} size="small" color="primary" aria-label="Restaurar correo">
+              <IconButton onClick={onToggleDelete} sx={{ p: 1.2 }} color="primary" aria-label="Restaurar correo">
                 <RestoreFromTrash />
               </IconButton>
             </Tooltip>
             <Tooltip title="Eliminar definitivamente">
-              <IconButton onClick={onDeleteForever} size="small" color="error" aria-label="Eliminar definitivamente">
+              <IconButton onClick={onDeleteForever} sx={{ p: 1.2 }} color="error" aria-label="Eliminar definitivamente">
                 <DeleteForever />
               </IconButton>
             </Tooltip>
@@ -119,12 +141,12 @@ const EmailActions = ({
         ) : (
           <>
             <Tooltip title={archived ? "Mover a Recibidos" : "Archivar"}>
-              <IconButton onClick={onToggleArchive} size="small" color="default" aria-label="Archivar correo">
+              <IconButton onClick={onToggleArchive} sx={{ p: 1.2 }} color="default" aria-label="Archivar correo">
                 <Archive />
               </IconButton>
             </Tooltip>
             <Tooltip title="Eliminar">
-              <IconButton onClick={onToggleDelete} size="small" color="error" aria-label="Eliminar correo">
+              <IconButton onClick={onToggleDelete} sx={{ p: 1.2 }} color="error" aria-label="Eliminar correo">
                 <Delete />
               </IconButton>
             </Tooltip>
