@@ -63,7 +63,7 @@ const Login = () => {
             Inicia sesión para continuar
           </Typography>
           <Typography variant="caption" align="center" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-            versión 9.9
+            versión 10.1
           </Typography>
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
