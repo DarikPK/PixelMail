@@ -66,6 +66,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCustomTheme } from '../contexts/ThemeContext';
 import { useEmails, getEmailSizeBytes } from '../contexts/EmailContext';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { hasRealAttachments } from '../utils/attachmentHelper';
 import { db } from '../config/firebase';
 
 const drawerWidth = 220;
@@ -170,7 +171,7 @@ const Layout = () => {
     let list = emails.map(email => ({
       email,
       size: getEmailSizeBytes(email),
-      hasAttachments: email.attachments && email.attachments.length > 0
+      hasAttachments: hasRealAttachments(email.attachments, email.html || email.body)
     }));
 
     // Filtro por categoría
@@ -638,7 +639,7 @@ const Layout = () => {
 
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 0.5 }}>
           <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '10.5px' }}>
-            versión 10.4
+            versión 10.5
           </Typography>
         </Box>
       </Box>

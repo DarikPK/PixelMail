@@ -39,6 +39,7 @@ import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
 import EmailViewer from '../components/EmailViewer';
 import { useEmails } from '../contexts/EmailContext';
+import { hasRealAttachments } from '../utils/attachmentHelper';
 
 interface EmailData {
   id: string;
@@ -1007,7 +1008,7 @@ const Recibidos = () => {
                               {previewText}
                             </Typography>
                           </Box>
-                          {safeArray(normalizedEmail.attachments).length > 0 && (
+                          {hasRealAttachments(normalizedEmail.attachments, normalizedEmail.html) && (
                             <AttachIcon sx={{ fontSize: '11px', color: 'text.disabled', alignSelf: 'center' }} />
                           )}
                         </Box>
@@ -1060,7 +1061,7 @@ const Recibidos = () => {
                             </Box>
                           )}
 
-                          {safeArray(normalizedEmail.attachments).length > 0 && (
+                          {hasRealAttachments(normalizedEmail.attachments, normalizedEmail.html) && (
                             <AttachIcon sx={{ fontSize: '12px', color: 'text.disabled' }} />
                           )}
                         </Box>

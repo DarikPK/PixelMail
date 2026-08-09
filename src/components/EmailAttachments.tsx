@@ -6,53 +6,23 @@ import {
   InsertDriveFile,
   Image as ImageIcon
 } from '@mui/icons-material';
-
-interface Attachment {
-  id?: string;
-  name?: string | null;
-  size?: number | null;
-  contentType?: string | null;
-}
+import { isInlineAttachment } from '../utils/attachmentHelper';
+import type { Attachment } from '../utils/attachmentHelper';
 
 interface EmailAttachmentsProps {
   attachments?: Attachment[] | null;
-  onDownload: (filename: string) => void;
+  onDownload: (filename: string, attachmentId?: string) => void;
   emailHtml?: string;
 }
 
 const EmailAttachments = ({ attachments, onDownload, emailHtml }: EmailAttachmentsProps) => {
   if (!attachments || !Array.isArray(attachments) || attachments.length === 0) return null;
 
-  const isInlineResource = (att: Attachment) => {
-    if (!emailHtml || typeof emailHtml !== 'string') return false;
-
-    // Verificar por ID
-    if (att.id && typeof att.id === 'string' && att.id.trim().length > 0) {
-      const idLower = att.id.toLowerCase();
-      if (emailHtml.toLowerCase().includes(`cid:${idLower}`)) {
-        return true;
-      }
-      if (emailHtml.toLowerCase().includes(idLower)) {
-        return true;
-      }
-    }
-
-    // Verificar por Name
-    if (att.name && typeof att.name === 'string' && att.name.trim().length > 0) {
-      const nameLower = att.name.toLowerCase();
-      if (emailHtml.toLowerCase().includes(`cid:${nameLower}`)) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
   // Filtrar adjuntos válidos que no sean recursos inline
   const visibleAttachments = attachments.filter((att) => {
     if (!att) return false;
-    // Si se detecta como recurso inline usado en el HTML, no mostrar en la lista de adjuntos
-    if (isInlineResource(att)) {
+    // Si se detecta como recurso inline usado en el HTML o explícito, no mostrar en la lista de adjuntos
+    if (isInlineAttachment(att, emailHtml)) {
       return false;
     }
     return true;
@@ -113,7 +83,7 @@ const EmailAttachments = ({ attachments, onDownload, emailHtml }: EmailAttachmen
                     </Typography>
                     <Chip
                       label="Descargar"
-                      onClick={() => onDownload(downloadName)}
+                      onClick={() => onDownload(downloadName, att.id)}
                       size="small"
                       variant="outlined"
                       clickable

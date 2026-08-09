@@ -2294,7 +2294,7 @@ const Configuracion = () => {
                   <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                     Versión actual de Pixel Mail
                   </Typography>
-                  <Chip label="v10.4" color="primary" size="small" sx={{ fontWeight: 'bold', fontSize: '11px' }} />
+                  <Chip label="v10.5" color="primary" size="small" sx={{ fontWeight: 'bold', fontSize: '11px' }} />
                 </Box>
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
