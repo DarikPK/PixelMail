@@ -12,13 +12,11 @@ interface Attachment {
   name?: string | null;
   size?: number | null;
   contentType?: string | null;
-  contentDisposition?: string | null;
-  contentId?: string | null;
 }
 
 interface EmailAttachmentsProps {
   attachments?: Attachment[] | null;
-  onDownload: (filename: string, attachmentId?: string) => void;
+  onDownload: (filename: string) => void;
   emailHtml?: string;
 }
 
@@ -26,40 +24,24 @@ const EmailAttachments = ({ attachments, onDownload, emailHtml }: EmailAttachmen
   if (!attachments || !Array.isArray(attachments) || attachments.length === 0) return null;
 
   const isInlineResource = (att: Attachment) => {
-    // 1. Validar por metadatos explícitos: content_disposition === "inline"
-    if (att.contentDisposition && typeof att.contentDisposition === 'string') {
-      const disposition = att.contentDisposition.toLowerCase().trim();
-      if (disposition === 'inline') {
+    if (!emailHtml || typeof emailHtml !== 'string') return false;
+
+    // Verificar por ID
+    if (att.id && typeof att.id === 'string' && att.id.trim().length > 0) {
+      const idLower = att.id.toLowerCase();
+      if (emailHtml.toLowerCase().includes(`cid:${idLower}`)) {
+        return true;
+      }
+      if (emailHtml.toLowerCase().includes(idLower)) {
         return true;
       }
     }
 
-    // 2. Validar contra el cuerpo HTML del correo
-    if (emailHtml && typeof emailHtml === 'string') {
-      const htmlLower = emailHtml.toLowerCase();
-
-      // Si tiene contentId, verificar su uso en el HTML (usualmente como src="cid:contentId")
-      if (att.contentId && typeof att.contentId === 'string' && att.contentId.trim().length > 0) {
-        const cidLower = att.contentId.toLowerCase().trim();
-        if (htmlLower.includes(`cid:${cidLower}`) || htmlLower.includes(cidLower)) {
-          return true;
-        }
-      }
-
-      // Si tiene id, verificar su uso en el HTML
-      if (att.id && typeof att.id === 'string' && att.id.trim().length > 0) {
-        const idLower = att.id.toLowerCase().trim();
-        if (htmlLower.includes(`cid:${idLower}`) || htmlLower.includes(idLower)) {
-          return true;
-        }
-      }
-
-      // Si tiene un name (filename) y es referenciado en el HTML como cid:name
-      if (att.name && typeof att.name === 'string' && att.name.trim().length > 0) {
-        const nameLower = att.name.toLowerCase().trim();
-        if (htmlLower.includes(`cid:${nameLower}`)) {
-          return true;
-        }
+    // Verificar por Name
+    if (att.name && typeof att.name === 'string' && att.name.trim().length > 0) {
+      const nameLower = att.name.toLowerCase();
+      if (emailHtml.toLowerCase().includes(`cid:${nameLower}`)) {
+        return true;
       }
     }
 
@@ -69,7 +51,7 @@ const EmailAttachments = ({ attachments, onDownload, emailHtml }: EmailAttachmen
   // Filtrar adjuntos válidos que no sean recursos inline
   const visibleAttachments = attachments.filter((att) => {
     if (!att) return false;
-    // Si se detecta como recurso inline usado en el HTML o explícito, no mostrar en la lista de adjuntos
+    // Si se detecta como recurso inline usado en el HTML, no mostrar en la lista de adjuntos
     if (isInlineResource(att)) {
       return false;
     }
@@ -131,7 +113,7 @@ const EmailAttachments = ({ attachments, onDownload, emailHtml }: EmailAttachmen
                     </Typography>
                     <Chip
                       label="Descargar"
-                      onClick={() => onDownload(downloadName, att.id)}
+                      onClick={() => onDownload(downloadName)}
                       size="small"
                       variant="outlined"
                       clickable

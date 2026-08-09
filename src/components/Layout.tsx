@@ -48,8 +48,8 @@ import {
   Search as SearchIcon,
   Notifications as NotificationsIcon,
   Folder as FolderIcon,
-  Brightness4 as DarkModeIcon,
-  Brightness7 as LightModeIcon,
+  LightMode as LightModeIcon,
+  DarkMode as DarkModeIcon,
   Add as AddIcon,
   KeyboardArrowDown as ArrowDownIcon,
   KeyboardArrowRight as ArrowRightIcon,
@@ -407,7 +407,13 @@ const Layout = () => {
                 <ListItemText
                   primary={item.text}
                   slotProps={{
-                    primary: { fontSize: '12px', fontWeight: isSelected ? 600 : 500 } as any
+                    primary: {
+                      fontSize: '12px',
+                      fontWeight: isSelected ? 600 : 500,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    } as any
                   }}
                 />
               </ListItemButton>
@@ -479,7 +485,13 @@ const Layout = () => {
                     <ListItemText
                       primary={`${folder.name} (${folderCount})`}
                       slotProps={{
-                        primary: { fontSize: '12px', fontWeight: isSelected ? 600 : 500 } as any
+                        primary: {
+                          fontSize: '12px',
+                          fontWeight: isSelected ? 600 : 500,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        } as any
                       }}
                     />
                   </ListItemButton>
@@ -610,7 +622,7 @@ const Layout = () => {
               Almacenamiento
             </Typography>
             <Typography variant="caption" sx={{ color: '#6F7A8A', fontSize: '10px', fontWeight: 'medium' }}>
-              {formatBytes(storageBreakdown.totalBytes)} de 10 GB
+              {formatBytes(storageBreakdown.totalBytes)} / 10 GB
             </Typography>
           </Box>
 
@@ -631,34 +643,10 @@ const Layout = () => {
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '10.5px', display: { xs: 'none', md: 'block' } }}>
-            versión 10.2
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 0.5 }}>
+          <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '10.5px' }}>
+            versión 10.3
           </Typography>
-
-          <Tooltip title={mode === 'dark' ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}>
-            <IconButton
-              size="small"
-              type="button"
-              onClick={toggleTheme}
-              sx={{
-                color: mode === 'dark' ? '#B8C1D1' : '#64748B',
-                p: 0.5,
-                width: 36,
-                height: 36,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                '&:hover': {
-                  bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.05)',
-                }
-              }}
-              aria-label={mode === 'dark' ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}
-            >
-              {mode === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
         </Box>
       </Box>
     </Box>
@@ -740,13 +728,25 @@ const Layout = () => {
             />
           </Box>
 
-          {/* Acciones derecha: Notificaciones, Configuración, Perfil */}
+          {/* Acciones derecha: Notificaciones, Configuración, Cambio de Tema, Perfil */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Tooltip title="Notificaciones">
               <IconButton sx={{ color: mode === 'dark' ? '#B8C1D1' : '#64748B' }} disabled size="small">
                 <NotificationsIcon sx={{ fontSize: '18px' }} />
               </IconButton>
             </Tooltip>
+
+            <Tooltip title={mode === 'dark' ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}>
+              <IconButton
+                onClick={toggleTheme}
+                size="small"
+                sx={{ color: mode === 'dark' ? '#B8C1D1' : '#64748B' }}
+                aria-label={mode === 'dark' ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}
+              >
+                {mode === 'dark' ? <LightModeIcon sx={{ fontSize: '18px' }} /> : <DarkModeIcon sx={{ fontSize: '18px' }} />}
+              </IconButton>
+            </Tooltip>
+
             <Tooltip title="Configuración">
               <IconButton
                 sx={{ color: mode === 'dark' ? '#B8C1D1' : '#64748B' }}
@@ -952,7 +952,7 @@ const Layout = () => {
                 ESTADO GENERAL
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.5, fontSize: '16px', color: 'text.primary' }}>
-                {formatBytes(storageBreakdown.totalBytes)} de 10 GB
+                {formatBytes(storageBreakdown.totalBytes)} / 10 GB
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
                 Usado: {storageBreakdown.percentageUsed.toFixed(2)}% | Actualizado: {storageBreakdown.lastUpdated}
