@@ -297,14 +297,37 @@ const Recibidos = () => {
     }
   };
 
-  const handleDownloadAttachment = async (filename: string) => {
+  const handleDownloadAttachment = async (filename: string, attachmentId?: string) => {
     if (!selectedEmailId || !user) return;
     const currentEmail = emails.find(e => e.id === selectedEmailId);
     if (!currentEmail) return;
 
     try {
       const idToken = await user.getIdToken();
-      const getAttachmentUrl = `${import.meta.env.VITE_SEND_EMAIL_URL.replace('/sendEmail', '/getAttachment')}?emailId=${currentEmail.resendEmailId}&filename=${encodeURIComponent(filename)}`;
+
+      // Construir URL relativa estable con soporte de reescritura en Firebase Hosting
+      let getAttachmentUrl = `/getAttachment?emailId=${currentEmail.resendEmailId}&filename=${encodeURIComponent(filename)}`;
+
+      if (attachmentId) {
+        getAttachmentUrl += `&attachmentId=${encodeURIComponent(attachmentId)}`;
+      }
+
+      // Soporte para pruebas en localhost fuera del emulador de Hosting
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        const devUrl = import.meta.env.VITE_GET_ATTACHMENT_URL;
+        if (devUrl) {
+          getAttachmentUrl = `${devUrl}?emailId=${currentEmail.resendEmailId}&filename=${encodeURIComponent(filename)}`;
+          if (attachmentId) {
+            getAttachmentUrl += `&attachmentId=${encodeURIComponent(attachmentId)}`;
+          }
+        } else {
+          // Fallback a producción en Firebase Hosting si estamos en local sin emulador
+          getAttachmentUrl = `https://pixel-mail-a78f6.web.app/getAttachment?emailId=${currentEmail.resendEmailId}&filename=${encodeURIComponent(filename)}`;
+          if (attachmentId) {
+            getAttachmentUrl += `&attachmentId=${encodeURIComponent(attachmentId)}`;
+          }
+        }
+      }
 
       const response = await fetch(getAttachmentUrl, {
         headers: {

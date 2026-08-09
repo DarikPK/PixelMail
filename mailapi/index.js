@@ -526,7 +526,9 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
     id: att.id || att.filename,
     name: att.filename,
     size: att.size || 0,
-    contentType: att.content_type || ""
+    contentType: att.content_type || "",
+    contentDisposition: att.content_disposition || "",
+    contentId: att.content_id || ""
   }));
 
   const targetEmail = normalizedTo[0] || "";
@@ -670,39 +672,99 @@ exports.getAttachment = onRequest({ region: "us-central1", secrets: ["RESEND_API
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { emailId, filename } = req.query;
+  const { emailId, filename, attachmentId } = req.query;
   if (!emailId || !filename) {
     return res.status(400).json({ error: "Missing emailId or filename" });
   }
 
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const emailData = await resend.emails.get(emailId);
-    const data = emailData.data || emailData;
 
-    if (!data || !data.attachments) {
-      return res.status(404).json({ error: "Email or attachments not found" });
-    }
+    // 1. Obtener documento de correo de Firestore para determinar dirección y buscar ID de adjunto
+    let emailDoc = null;
+    let direction = "inbound"; // por defecto
 
-    const attachment = data.attachments.find(att => att.filename === filename);
-    if (!attachment) {
-      return res.status(404).json({ error: "Attachment not found" });
-    }
+    const emailQuery = await admin.firestore().collection("emails")
+      .where("resendEmailId", "==", emailId)
+      .limit(1)
+      .get();
 
-    if (attachment.content) {
-      const buffer = Buffer.isBuffer(attachment.content)
-        ? attachment.content
-        : Buffer.from(attachment.content, 'base64');
-      res.setHeader('Content-Type', attachment.contentType || 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
-      return res.send(buffer);
-    } else if (attachment.url) {
-      return res.redirect(attachment.url);
+    if (!emailQuery.empty) {
+      emailDoc = emailQuery.docs[0].data();
     } else {
-      return res.status(404).json({ error: "Attachment content not available" });
+      const docSnap = await admin.firestore().collection("emails").doc(emailId).get();
+      if (docSnap.exists) {
+        emailDoc = docSnap.data();
+      }
     }
+
+    if (emailDoc) {
+      direction = emailDoc.direction || "inbound";
+    }
+
+    // 2. Determinar el ID real del adjunto en Resend
+    let targetAttachmentId = attachmentId;
+    if (!targetAttachmentId && emailDoc && emailDoc.attachments && Array.isArray(emailDoc.attachments)) {
+      const found = emailDoc.attachments.find(att =>
+        att.name === filename || (att.id && att.id === filename)
+      );
+      if (found) {
+        targetAttachmentId = found.id;
+      }
+    }
+
+    if (!targetAttachmentId) {
+      targetAttachmentId = filename; // fallback por si no se encuentra ID
+    }
+
+    // 3. Recuperar metadatos y download_url firmado usando la API oficial de Resend
+    let attachmentData = null;
+
+    if (direction === "inbound") {
+      try {
+        const { data, error } = await resend.emails.receiving.attachments.get({
+          emailId: emailId,
+          id: targetAttachmentId
+        });
+        if (error) {
+          throw new Error(error.message);
+        }
+        attachmentData = data;
+      } catch (inboundErr) {
+        logger.error("[RESEND ATTACHMENT] Error en inbound API, reintentando con outbound", inboundErr);
+      }
+    }
+
+    if (!attachmentData) {
+      const { data, error } = await resend.emails.attachments.get({
+        emailId: emailId,
+        id: targetAttachmentId
+      });
+      if (error) {
+        throw new Error(error.message || "Error al recuperar el adjunto desde Resend");
+      }
+      attachmentData = data;
+    }
+
+    if (!attachmentData || !attachmentData.download_url) {
+      return res.status(404).json({ error: "Attachment or download URL not found in Resend response" });
+    }
+
+    // 4. Descargar el adjunto usando el download_url oficial firmado y enviarlo al cliente
+    const fetchResponse = await fetch(attachmentData.download_url);
+    if (!fetchResponse.ok) {
+      throw new Error(`Failed to download from Resend CDN: ${fetchResponse.statusText}`);
+    }
+
+    const arrayBuffer = await fetchResponse.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    res.setHeader('Content-Type', attachmentData.content_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${attachmentData.filename || filename}"`);
+    return res.send(buffer);
+
   } catch (err) {
-    logger.error("[RESEND ATTACHMENT] Error fetching attachment", err);
+    logger.error("[RESEND ATTACHMENT] Error fetching attachment via official API", err);
     return res.status(500).json({ error: err.message });
   }
 });

@@ -38,7 +38,7 @@ interface EmailViewerProps {
   onToggleArchive: () => void;
   onToggleDelete: () => void;
   onDeleteForever: () => void;
-  onDownloadAttachment: (filename: string) => void;
+  onDownloadAttachment: (filename: string, attachmentId?: string) => void;
 }
 
 const EmailViewer = ({
