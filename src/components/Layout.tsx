@@ -10,7 +10,6 @@ import {
   ListItem,
   ListItemButton,
   ListItemIcon,
-  ListItemText,
   useMediaQuery,
   useTheme,
   Button,
@@ -80,12 +79,6 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-function getStorageProgressString(usedPercent: number): string {
-  const totalBlocks = 10;
-  const activeBlocks = Math.max(1, Math.min(10, Math.round((usedPercent / 100) * totalBlocks)));
-  const inactiveBlocks = totalBlocks - activeBlocks;
-  return '█'.repeat(activeBlocks) + '░'.repeat(inactiveBlocks);
-}
 
 const Layout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -404,18 +397,27 @@ const Layout = () => {
                 <ListItemIcon sx={{ minWidth: 24, color: isSelected ? '#3B82F6' : 'inherit', '& svg': { fontSize: '16px' } }}>
                   {item.icon}
                 </ListItemIcon>
-                <ListItemText
-                  primary={item.text}
-                  slotProps={{
-                    primary: {
+                <Box
+                  sx={{
+                    flexGrow: 1,
+                    minWidth: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{
                       fontSize: '12px',
                       fontWeight: isSelected ? 600 : 500,
                       whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    } as any
-                  }}
-                />
+                      display: 'inline'
+                    }}
+                  >
+                    {item.text}
+                  </Typography>
+                </Box>
               </ListItemButton>
             </ListItem>
           );
@@ -482,18 +484,27 @@ const Layout = () => {
                       <FolderIcon />
                     </ListItemIcon>
 
-                    <ListItemText
-                      primary={`${folder.name} (${folderCount})`}
-                      slotProps={{
-                        primary: {
+                    <Box
+                      sx={{
+                        flexGrow: 1,
+                        minWidth: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <Typography
+                        variant="body2"
+                        sx={{
                           fontSize: '12px',
                           fontWeight: isSelected ? 600 : 500,
                           whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        } as any
-                      }}
-                    />
+                          display: 'inline'
+                        }}
+                      >
+                        {`${folder.name} (${folderCount})`}
+                      </Typography>
+                    </Box>
                   </ListItemButton>
 
                   {/* Vista previa miniatura de los correos contenidos (Mini Outlook) */}
@@ -617,35 +628,17 @@ const Layout = () => {
             }
           }}
         >
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, flexWrap: 'wrap' }}>
-            <Typography variant="caption" sx={{ color: mode === 'dark' ? '#B8C1D1' : '#64748B', fontWeight: 'bold', fontSize: '10px' }}>
-              Almacenamiento
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#6F7A8A', fontSize: '10px', fontWeight: 'medium' }}>
-              {formatBytes(storageBreakdown.totalBytes)} / 10 GB
-            </Typography>
-          </Box>
-
-          {/* Barra visual moderna solicitada: ██████░░░░ */}
-          <Typography
-            variant="caption"
-            sx={{
-              fontFamily: 'monospace',
-              fontSize: '11px',
-              letterSpacing: '1px',
-              color: '#3B82F6',
-              display: 'block',
-              lineHeight: 1.1,
-              mt: 0.2
-            }}
-          >
-            {getStorageProgressString(storageBreakdown.percentageUsed)}
+          <Typography variant="caption" sx={{ color: mode === 'dark' ? '#B8C1D1' : '#64748B', fontWeight: 'bold', fontSize: '10px', display: 'block' }}>
+            Almacenamiento
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#6F7A8A', fontSize: '10.5px', fontWeight: '600', display: 'block', mt: 0.2 }}>
+            {formatBytes(storageBreakdown.totalBytes)} / 10 GB
           </Typography>
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 0.5 }}>
           <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '10.5px' }}>
-            versión 10.3
+            versión 10.4
           </Typography>
         </Box>
       </Box>
