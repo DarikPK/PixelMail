@@ -88,6 +88,7 @@ const EmailViewer = ({
         <EmailAttachments
           attachments={email.attachments}
           onDownload={onDownloadAttachment}
+          emailHtml={email.html}
         />
       </Paper>
     </Box>
