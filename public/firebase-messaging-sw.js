@@ -50,7 +50,15 @@ messaging.onBackgroundMessage((payload) => {
     requireInteraction: type === 'outbound_error' // Persistente si es un error de envío
   };
 
-  return self.registration.showNotification(title, notificationOptions);
+  // Evitar duplicaciones por emailId usando la lista de notificaciones activas del registro
+  return self.registration.getNotifications().then((notifications) => {
+    const isDuplicate = notifications.some(n => n.tag === tag);
+    if (isDuplicate) {
+      console.log('[FCM SW] Evitando notificación duplicada para el tag:', tag);
+      return;
+    }
+    return self.registration.showNotification(title, notificationOptions);
+  });
 });
 
 // Manejar clic en las notificaciones recibidas

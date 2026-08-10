@@ -22,6 +22,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useEmails } from '../contexts/EmailContext';
+import { hasRealAttachments } from '../utils/attachmentHelper';
 
 interface EmailData {
   id: string;
@@ -302,7 +303,7 @@ const Enviados = () => {
                       ENVIADO
                     </Box>
 
-                    {email.attachments && email.attachments.length > 0 && (
+                    {hasRealAttachments(email.attachments, email.body) && (
                       <AttachIcon sx={{ fontSize: '12px', color: 'text.disabled' }} />
                     )}
                   </Box>

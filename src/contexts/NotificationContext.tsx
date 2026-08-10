@@ -133,7 +133,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         updatedAt: serverTimestamp(),
         lastSeenAt: serverTimestamp(),
         tokenUpdatedAt: serverTimestamp(),
-        appVersion: '9.7',
+        appVersion: '10.6',
         active: true
       });
       setDeviceRegistered(true);
