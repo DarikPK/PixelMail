@@ -167,13 +167,15 @@ async function sendNotificationToUser(userId, payload) {
     if (tokens.length === 0) return;
 
     // 4. Enviar notificación push multicast usando Firebase Admin Messaging
+    // Enviamos únicamente el bloque 'data' con title y body para evitar que el SDK de Firebase
+    // autogenere una notificación duplicada cuando la aplicación está en segundo plano.
     const fcmMessage = {
       tokens,
-      notification: {
+      data: {
         title: displayTitle,
-        body: displayBody
-      },
-      data: payload.data || {}
+        body: displayBody,
+        ...(payload.data || {})
+      }
     };
 
     logger.log(`[FCM] Enviando mensaje multicast a ${tokens.length} dispositivos para el usuario ${userId}`);
@@ -258,6 +260,7 @@ exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) 
   let uploadedFiles = [];
 
   const contentType = req.headers["content-type"] || "";
+  let inlineMetadata = [];
   if (contentType.includes("multipart/form-data")) {
     try {
       const parsed = await parseMultipart(req);
@@ -268,6 +271,13 @@ exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) 
       bcc = parsed.fields.bcc;
       emailId = parsed.fields.emailId;
       uploadedFiles = parsed.files || [];
+      if (parsed.fields.inlineMetadata) {
+        try {
+          inlineMetadata = JSON.parse(parsed.fields.inlineMetadata);
+        } catch (e) {
+          logger.error("[RESEND] Error parsing inlineMetadata", e);
+        }
+      }
     } catch (parseError) {
       logger.error("[BUSBOY] parsing error", parseError);
       return res.status(400).json({ error: "Error parsing form-data: " + parseError.message });
@@ -300,7 +310,15 @@ exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) 
     subject,
     body: html,
     status: "sending",
-    attachments: uploadedFiles.map(f => ({ name: f.originalname, size: f.size })),
+    attachments: uploadedFiles.map(f => {
+      const meta = inlineMetadata.find(m => m.filename === f.originalname);
+      return {
+        name: f.originalname,
+        size: f.size,
+        contentType: f.mimetype,
+        ...(meta ? { contentDisposition: meta.disposition, contentId: meta.contentId } : {})
+      };
+    }),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     direction: "outbound"
   };
@@ -335,11 +353,24 @@ exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) 
     }
 
     if (uploadedFiles.length > 0) {
-      emailPayload.attachments = uploadedFiles.map((file) => ({
-        filename: file.originalname,
-        content: file.buffer,
-        contentType: file.mimetype,
-      }));
+      emailPayload.attachments = uploadedFiles.map((file) => {
+        const meta = inlineMetadata.find(m => m.filename === file.originalname);
+        const att = {
+          filename: file.originalname,
+          content: file.buffer,
+          contentType: file.mimetype,
+        };
+        if (meta) {
+          if (meta.contentId) {
+            att.content_id = meta.contentId;
+            att.contentId = meta.contentId;
+          }
+          if (meta.disposition) {
+            att.disposition = meta.disposition;
+          }
+        }
+        return att;
+      });
     }
 
     const { data, error } = await resend.emails.send(emailPayload);
@@ -622,11 +653,9 @@ exports.sendTestPush = onRequest({ region: "us-central1" }, async (req, res) => 
   try {
     const message = {
       token,
-      notification: {
-        title: "¡Notificación de prueba exitosa!",
-        body: "Felicidades, las notificaciones push de Pixel Mail están configuradas correctamente."
-      },
       data: {
+        title: "¡Notificación de prueba exitosa!",
+        body: "Felicidades, las notificaciones push de Pixel Mail están configuradas correctamente.",
         type: "test_notification"
       }
     };

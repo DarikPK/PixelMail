@@ -2,6 +2,16 @@ import { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
+import Image from '@tiptap/extension-image';
+
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(file);
+  });
+};
 import Link from '@tiptap/extension-link';
 import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
@@ -216,6 +226,7 @@ const Editor = ({ content, onChange }: EditorProps) => {
     extensions: [
       StarterKit,
       Underline,
+      Image,
       Link.configure({
         openOnClick: false,
       }),
@@ -228,6 +239,54 @@ const Editor = ({ content, onChange }: EditorProps) => {
       FontFamily,
       FontSize,
     ],
+    editorProps: {
+      handleDOMEvents: {
+        paste: (view, event) => {
+          const items = event.clipboardData?.items;
+          if (!items) return false;
+
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.type.startsWith('image/')) {
+              const file = item.getAsFile();
+              if (file) {
+                event.preventDefault();
+                fileToBase64(file).then((base64) => {
+                  const node = view.state.schema.nodes.image.create({ src: base64 });
+                  const transaction = view.state.tr.replaceSelectionWith(node);
+                  view.dispatch(transaction);
+                }).catch((err) => {
+                  console.error("Error reading pasted image:", err);
+                });
+                return true; // handled
+              }
+            }
+          }
+          return false;
+        },
+        drop: (view, event) => {
+          const files = event.dataTransfer?.files;
+          if (!files || files.length === 0) return false;
+
+          const file = files[0];
+          if (file.type.startsWith('image/')) {
+            event.preventDefault();
+            const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY });
+            if (coordinates) {
+              fileToBase64(file).then((base64) => {
+                const node = view.state.schema.nodes.image.create({ src: base64 });
+                const transaction = view.state.tr.insert(coordinates.pos, node);
+                view.dispatch(transaction);
+              }).catch((err) => {
+                console.error("Error reading dropped image:", err);
+              });
+            }
+            return true; // handled
+          }
+          return false;
+        }
+      }
+    },
     content: content,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());

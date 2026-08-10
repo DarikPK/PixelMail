@@ -33,6 +33,26 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { applyScaleToHTML } from '../utils/signatureScaler';
 import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 
+const getExtensionFromMime = (mime: string): string => {
+  if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
+  if (mime.includes('png')) return 'png';
+  if (mime.includes('gif')) return 'gif';
+  if (mime.includes('webp')) return 'webp';
+  return 'png'; // default fallback
+};
+
+const dataURLtoFile = (dataurl: string, filename: string): File => {
+  const arr = dataurl.split(',');
+  const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new File([u8arr], filename, { type: mime });
+};
+
 // Helpers para manipulación de firma en HTML
 const removeSignatureFromHTML = (html: string): string => {
   const parser = new DOMParser();
@@ -416,6 +436,42 @@ const Redactar = () => {
     let finalHtml = addSignature ? `${bodyHtml}<br><br>${signatureHtml}` : bodyHtml;
     finalHtml = cleanHTMLOfEmptyBRs(finalHtml);
 
+    // Procesar imágenes inline (data URI) en el finalHtml
+    const docParser = new DOMParser();
+    const parsedDoc = docParser.parseFromString(finalHtml, 'text/html');
+    const images = parsedDoc.querySelectorAll('img');
+    const tempInlineFiles: File[] = [];
+    const inlineMetadata: any[] = [];
+
+    images.forEach((img, idx) => {
+      const src = img.getAttribute('src');
+      if (src && src.startsWith('data:image/')) {
+        const mime = src.split(',')[0].match(/:(.*?);/)?.[1] || 'image/png';
+        const ext = getExtensionFromMime(mime);
+        const filename = `pixel-inline-${Date.now()}-${idx}.${ext}`;
+        const contentId = `pixel-inline-${Date.now()}-${idx}`;
+
+        try {
+          const file = dataURLtoFile(src, filename);
+          tempInlineFiles.push(file);
+          inlineMetadata.push({
+            filename,
+            contentId,
+            disposition: 'inline'
+          });
+
+          // Reemplazar src con cid
+          img.setAttribute('src', `cid:${contentId}`);
+        } catch (e) {
+          console.error("Error converting inline image to file:", e);
+        }
+      }
+    });
+
+    if (tempInlineFiles.length > 0) {
+      finalHtml = parsedDoc.body.innerHTML;
+    }
+
     // Registrar el estado del HTML después de reemplazar imágenes
     logHTMLStructure(finalHtml, "DESPUÉS de reemplazar imágenes");
 
@@ -446,7 +502,8 @@ const Redactar = () => {
         subject,
         textLength: bodyTextFinal?.length || 0,
         htmlLength: finalHtml?.length || 0,
-        attachmentCount: attachments.length
+        attachmentCount: attachments.length,
+        inlineCount: tempInlineFiles.length
       });
 
       const formData = new FormData();
@@ -457,10 +514,20 @@ const Redactar = () => {
       formData.append('html', finalHtml); // Usar finalHtml para Resend
       formData.append('text', bodyTextFinal || '');
 
+      if (inlineMetadata.length > 0) {
+        formData.append('inlineMetadata', JSON.stringify(inlineMetadata));
+      }
+
+      // Adjuntos convencionales
       attachments.forEach((item) => {
         if (item.file) {
           formData.append('attachments', item.file, item.name);
         }
+      });
+
+      // Adjuntos inline
+      tempInlineFiles.forEach((file) => {
+        formData.append('attachments', file, file.name);
       });
 
       console.log('[RESEND] sending');
