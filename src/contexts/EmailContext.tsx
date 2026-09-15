@@ -2,9 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { db } from '../config/firebase';
 import {
   collection,
-  disableNetwork,
   doc,
-  enableNetwork,
   onSnapshot,
   query,
   updateDoc,
@@ -252,39 +250,12 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
     return [10, 20, 30, 40].includes(parsed) ? parsed : 20;
   });
 
-  // Firestore deja de insistir contra la red mientras el navegador reporta offline.
-  // Al volver la conexión, los listeners se resincronizan automáticamente.
-  useEffect(() => {
-    const handleOffline = () => {
-      void disableNetwork(db).catch(() => undefined);
-    };
-
-    const handleOnline = () => {
-      void enableNetwork(db).catch((error) => {
-        console.warn('[FIRESTORE] No se pudo reactivar la sincronización todavía.', error);
-      });
-    };
-
-    window.addEventListener('offline', handleOffline);
-    window.addEventListener('online', handleOnline);
-
-    if (!navigator.onLine) {
-      handleOffline();
-    }
-
-    return () => {
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('online', handleOnline);
-    };
-  }, []);
-
   useEffect(() => {
     if (authLoading || !user) return;
 
     const userRef = doc(db, 'users', user.uid);
     const unsubscribe = onSnapshot(
       userRef,
-      { includeMetadataChanges: true },
       (snapshot) => {
         if (!snapshot.exists()) return;
         const data = snapshot.data();
@@ -384,7 +355,6 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
 
     const unsubscribe = onSnapshot(
       emailsQuery,
-      { includeMetadataChanges: true },
       (querySnapshot) => {
         const list: EmailData[] = [];
 
