@@ -1,14 +1,21 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { db } from '../config/firebase';
 import {
   collection,
   doc,
+  getCountFromServer,
+  getDocs,
+  limit,
   onSnapshot,
+  orderBy,
   query,
+  startAfter,
   updateDoc,
   where,
   writeBatch,
-  type FirestoreError
+  type DocumentData,
+  type FirestoreError,
+  type QueryDocumentSnapshot
 } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 
@@ -79,6 +86,15 @@ export interface StorageBreakdown {
   lastUpdated: string;
 }
 
+interface EmailCounts {
+  inbox: number;
+  starred: number;
+  sent: number;
+  archived: number;
+  deleted: number;
+  folders: Record<string, number>;
+}
+
 interface EmailContextType {
   emails: EmailData[];
   loading: boolean;
@@ -103,20 +119,17 @@ interface EmailContextType {
   bulkMoveToTrash: () => Promise<void>;
   bulkDeleteForever: () => Promise<void>;
   bulkRestore: () => Promise<void>;
-  counts: {
-    inbox: number;
-    starred: number;
-    sent: number;
-    archived: number;
-    deleted: number;
-    folders: Record<string, number>;
-  };
+  counts: EmailCounts;
   storageBreakdown: StorageBreakdown;
   emailsPerPage: number;
   setEmailsPerPage: (val: number) => Promise<void>;
 }
 
 const EmailContext = createContext<EmailContextType | undefined>(undefined);
+
+const INITIAL_BATCH_SIZE = 20;
+const BACKGROUND_BATCH_SIZE = 50;
+const BACKGROUND_BATCH_DELAY_MS = 120;
 
 export const getStringBytes = (str: string): number => {
   if (!str) return 0;
@@ -205,6 +218,56 @@ const isTransientFirestoreError = (error: FirestoreError) => (
   !navigator.onLine || error.code === 'unavailable' || error.code === 'cancelled'
 );
 
+const mapSnapshotToEmail = (snapshotDoc: QueryDocumentSnapshot<DocumentData>): EmailData => {
+  const data = snapshotDoc.data();
+  const receivedAt =
+    toDate(data.receivedAt) ||
+    toDate(data.sentAt) ||
+    toDate(data.createdAt) ||
+    toDate(data.updatedAt) ||
+    new Date(0);
+  const createdAt =
+    toDate(data.createdAt) ||
+    toDate(data.sentAt) ||
+    toDate(data.updatedAt) ||
+    receivedAt;
+  const html = typeof data.html === 'string'
+    ? data.html
+    : (typeof data.body === 'string' ? data.body : '');
+  const body = typeof data.body === 'string' ? data.body : html;
+
+  return {
+    id: snapshotDoc.id,
+    resendEmailId: data.resendEmailId || data.providerMessageId || snapshotDoc.id,
+    from: data.from || '',
+    fromName: data.fromName || '',
+    fromEmail: data.fromEmail || data.from || '',
+    to: normalizeRecipientArray(data.to),
+    cc: normalizeRecipientArray(data.cc),
+    bcc: normalizeRecipientArray(data.bcc),
+    subject: data.subject || '(Sin asunto)',
+    text: data.text || '',
+    html,
+    body,
+    attachments: normalizeAttachments(data.attachments),
+    receivedAt,
+    createdAt,
+    direction: data.direction || 'inbound',
+    status: data.status || 'received',
+    read: data.read ?? false,
+    starred: data.starred ?? false,
+    archived: data.archived ?? false,
+    deleted: data.deleted ?? false,
+    deletedAt: data.deletedAt,
+    previousFolder: data.previousFolder ?? null,
+    folderId: data.folderId ?? null,
+    recipients: data.recipients,
+    labels: data.labels
+  };
+};
+
+const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
 export const evaluateRule = (email: EmailData, rule: Rule): boolean => {
   const { conditionField, conditionOperator, conditionValue } = rule;
 
@@ -243,6 +306,7 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
   const [rawEmails, setRawEmails] = useState<EmailData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [serverCounts, setServerCounts] = useState<EmailCounts | null>(null);
 
   const [emailsPerPage, setEmailsPerPageRaw] = useState<number>(() => {
     const saved = localStorage.getItem('pixelmail_emails_per_page');
@@ -296,7 +360,6 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
         console.error('[EMAIL CONTEXT] Error guardando emailsPerPage en Firestore:', error);
       }
     } else {
-      // Firestore mantendrá la escritura pendiente hasta recuperar la conexión.
       void writePromise.catch((error) => {
         console.warn('[EMAIL CONTEXT] No se pudo completar la preferencia pendiente.', error);
       });
@@ -338,88 +401,234 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
     localStorage.setItem('pixelmail_rules', JSON.stringify(rules));
   }, [rules]);
 
-  // Un único listener de correos alimenta Recibidos, Enviados, contadores y almacenamiento.
+  const mergeEmailBatch = useCallback((batch: EmailData[]) => {
+    if (batch.length === 0) return;
+    setRawEmails((previous) => {
+      const byId = new Map(previous.map((email) => [email.id, email]));
+      batch.forEach((email) => byId.set(email.id, email));
+      return Array.from(byId.values()).sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime());
+    });
+  }, []);
+
+  const refreshCounts = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const emailsRef = collection(db, 'emails');
+      const activeInboundQuery = query(
+        emailsRef,
+        where('userId', '==', user.uid),
+        where('direction', '==', 'inbound'),
+        where('deleted', '==', false),
+        where('archived', '==', false)
+      );
+      const starredQuery = query(
+        emailsRef,
+        where('userId', '==', user.uid),
+        where('direction', '==', 'inbound'),
+        where('deleted', '==', false),
+        where('starred', '==', true)
+      );
+      const outboundAllQuery = query(
+        emailsRef,
+        where('userId', '==', user.uid),
+        where('direction', '==', 'outbound')
+      );
+      const outboundDeletedQuery = query(
+        emailsRef,
+        where('userId', '==', user.uid),
+        where('direction', '==', 'outbound'),
+        where('deleted', '==', true)
+      );
+      const archivedQuery = query(
+        emailsRef,
+        where('userId', '==', user.uid),
+        where('direction', '==', 'inbound'),
+        where('deleted', '==', false),
+        where('archived', '==', true)
+      );
+      const deletedQuery = query(
+        emailsRef,
+        where('userId', '==', user.uid),
+        where('deleted', '==', true)
+      );
+
+      const folderQueries = folders.map((folder) => query(
+        emailsRef,
+        where('userId', '==', user.uid),
+        where('direction', '==', 'inbound'),
+        where('deleted', '==', false),
+        where('archived', '==', false),
+        where('folderId', '==', folder.id)
+      ));
+
+      const [activeInboundSnap, starredSnap, outboundAllSnap, outboundDeletedSnap, archivedSnap, deletedSnap, ...folderSnaps] = await Promise.all([
+        getCountFromServer(activeInboundQuery),
+        getCountFromServer(starredQuery),
+        getCountFromServer(outboundAllQuery),
+        getCountFromServer(outboundDeletedQuery),
+        getCountFromServer(archivedQuery),
+        getCountFromServer(deletedQuery),
+        ...folderQueries.map((folderQuery) => getCountFromServer(folderQuery))
+      ]);
+
+      const folderCounts: Record<string, number> = {};
+      let folderTotal = 0;
+      folders.forEach((folder, index) => {
+        const count = folderSnaps[index]?.data().count || 0;
+        folderCounts[folder.id] = count;
+        folderTotal += count;
+      });
+
+      setServerCounts({
+        inbox: Math.max(0, activeInboundSnap.data().count - folderTotal),
+        starred: starredSnap.data().count,
+        sent: Math.max(0, outboundAllSnap.data().count - outboundDeletedSnap.data().count),
+        archived: archivedSnap.data().count,
+        deleted: deletedSnap.data().count,
+        folders: folderCounts
+      });
+    } catch (error) {
+      console.warn('[EMAIL CONTEXT] No se pudieron actualizar los contadores agregados; se usarán los correos ya cargados.', error);
+    }
+  }, [user, folders]);
+
+  // 10.8: primera pantalla rápida. Solo escuchamos los 20 correos más recientes de
+  // entrada y salida. El histórico se incorpora después en lotes de 50 sin bloquear
+  // la interfaz. Así la bandeja aparece primero y el resto se completa en segundo plano.
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
       setRawEmails([]);
+      setServerCounts(null);
       setLoading(false);
       return;
     }
 
+    let cancelled = false;
+    let inboundReady = false;
+    let outboundReady = false;
+    let inboundBackgroundStarted = false;
+    let outboundBackgroundStarted = false;
+
+    setRawEmails([]);
+    setServerCounts(null);
     setLoading(true);
-    const emailsQuery = query(
-      collection(db, 'emails'),
-      where('userId', '==', user.uid)
+    void refreshCounts();
+
+    const emailsRef = collection(db, 'emails');
+
+    const markReady = (direction: 'inbound' | 'outbound') => {
+      if (direction === 'inbound') inboundReady = true;
+      else outboundReady = true;
+      if (!cancelled && inboundReady && outboundReady) {
+        setLoading(false);
+      }
+    };
+
+    const loadHistoricalBatches = async (
+      direction: 'inbound' | 'outbound',
+      orderField: 'receivedAt' | 'updatedAt',
+      initialCursor: QueryDocumentSnapshot<DocumentData> | null
+    ) => {
+      let cursor = initialCursor;
+      if (!cursor) return;
+
+      try {
+        while (!cancelled) {
+          await wait(BACKGROUND_BATCH_DELAY_MS);
+          if (cancelled) return;
+
+          const historicalQuery = query(
+            emailsRef,
+            where('userId', '==', user.uid),
+            where('direction', '==', direction),
+            orderBy(orderField, 'desc'),
+            startAfter(cursor),
+            limit(BACKGROUND_BATCH_SIZE)
+          );
+
+          const snapshot = await getDocs(historicalQuery);
+          if (cancelled || snapshot.empty) return;
+
+          mergeEmailBatch(snapshot.docs.map(mapSnapshotToEmail));
+          cursor = snapshot.docs[snapshot.docs.length - 1] || null;
+
+          if (snapshot.size < BACKGROUND_BATCH_SIZE) return;
+        }
+      } catch (error) {
+        console.warn(`[EMAIL CONTEXT] La carga progresiva de ${direction} se detuvo; los correos ya cargados permanecen disponibles.`, error);
+      }
+    };
+
+    const inboundQuery = query(
+      emailsRef,
+      where('userId', '==', user.uid),
+      where('direction', '==', 'inbound'),
+      orderBy('receivedAt', 'desc'),
+      limit(INITIAL_BATCH_SIZE)
     );
 
-    const unsubscribe = onSnapshot(
-      emailsQuery,
-      (querySnapshot) => {
-        const list: EmailData[] = [];
+    const outboundQuery = query(
+      emailsRef,
+      where('userId', '==', user.uid),
+      where('direction', '==', 'outbound'),
+      orderBy('updatedAt', 'desc'),
+      limit(INITIAL_BATCH_SIZE)
+    );
 
-        querySnapshot.forEach((snapshotDoc) => {
-          const data = snapshotDoc.data();
-          const receivedAt =
-            toDate(data.receivedAt) ||
-            toDate(data.sentAt) ||
-            toDate(data.createdAt) ||
-            new Date(0);
-          const createdAt =
-            toDate(data.createdAt) ||
-            toDate(data.sentAt) ||
-            receivedAt;
-          const html = typeof data.html === 'string'
-            ? data.html
-            : (typeof data.body === 'string' ? data.body : '');
-          const body = typeof data.body === 'string' ? data.body : html;
+    const unsubscribeInbound = onSnapshot(
+      inboundQuery,
+      (snapshot) => {
+        mergeEmailBatch(snapshot.docs.map(mapSnapshotToEmail));
+        markReady('inbound');
+        void refreshCounts();
 
-          list.push({
-            id: snapshotDoc.id,
-            resendEmailId: data.resendEmailId || data.providerMessageId || snapshotDoc.id,
-            from: data.from || '',
-            fromName: data.fromName || '',
-            fromEmail: data.fromEmail || data.from || '',
-            to: normalizeRecipientArray(data.to),
-            cc: normalizeRecipientArray(data.cc),
-            bcc: normalizeRecipientArray(data.bcc),
-            subject: data.subject || '(Sin asunto)',
-            text: data.text || '',
-            html,
-            body,
-            attachments: normalizeAttachments(data.attachments),
-            receivedAt,
-            createdAt,
-            direction: data.direction || 'inbound',
-            status: data.status || 'received',
-            read: data.read ?? false,
-            starred: data.starred ?? false,
-            archived: data.archived ?? false,
-            deleted: data.deleted ?? false,
-            deletedAt: data.deletedAt,
-            previousFolder: data.previousFolder ?? null,
-            folderId: data.folderId ?? null,
-            recipients: data.recipients,
-            labels: data.labels
-          });
-        });
-
-        list.sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime());
-        setRawEmails(list);
-        setLoading(false);
+        if (!inboundBackgroundStarted) {
+          inboundBackgroundStarted = true;
+          const cursor = snapshot.docs[snapshot.docs.length - 1] || null;
+          void loadHistoricalBatches('inbound', 'receivedAt', cursor);
+        }
       },
       (error) => {
-        setLoading(false);
+        markReady('inbound');
         if (isTransientFirestoreError(error)) {
-          console.info('[EMAIL CONTEXT] Sincronización temporalmente pausada; se mantienen los correos locales.');
+          console.info('[EMAIL CONTEXT] Entrada temporalmente sin conexión; se conservan los correos ya cargados.');
           return;
         }
-        console.error('[EMAIL CONTEXT] Error leyendo correos:', error);
+        console.error('[EMAIL CONTEXT] Error leyendo los correos recientes de entrada:', error);
       }
     );
 
-    return () => unsubscribe();
-  }, [user, authLoading]);
+    const unsubscribeOutbound = onSnapshot(
+      outboundQuery,
+      (snapshot) => {
+        mergeEmailBatch(snapshot.docs.map(mapSnapshotToEmail));
+        markReady('outbound');
+        void refreshCounts();
+
+        if (!outboundBackgroundStarted) {
+          outboundBackgroundStarted = true;
+          const cursor = snapshot.docs[snapshot.docs.length - 1] || null;
+          void loadHistoricalBatches('outbound', 'updatedAt', cursor);
+        }
+      },
+      (error) => {
+        markReady('outbound');
+        if (isTransientFirestoreError(error)) {
+          console.info('[EMAIL CONTEXT] Enviados temporalmente sin conexión; se conservan los correos ya cargados.');
+          return;
+        }
+        console.error('[EMAIL CONTEXT] Error leyendo los correos recientes enviados:', error);
+      }
+    );
+
+    return () => {
+      cancelled = true;
+      unsubscribeInbound();
+      unsubscribeOutbound();
+    };
+  }, [user, authLoading, mergeEmailBatch, refreshCounts]);
 
   const emails: EmailData[] = useMemo(() => {
     return rawEmails.map((email) => {
@@ -441,7 +650,7 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
     });
   }, [rawEmails, rules]);
 
-  const counts = useMemo(() => {
+  const loadedCounts = useMemo<EmailCounts>(() => {
     let inbox = 0;
     let starred = 0;
     let sent = 0;
@@ -484,6 +693,8 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
       folders: folderCounts
     };
   }, [emails, folders]);
+
+  const counts = serverCounts || loadedCounts;
 
   const storageBreakdown: StorageBreakdown = useMemo(() => {
     let receivedBytes = 0;
@@ -554,6 +765,7 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
       await batch.commit();
       console.info(`[BULK ACTION] ${successMessage}`);
       setSelectedEmailIds([]);
+      void refreshCounts();
     } catch (error) {
       console.error('[BULK ACTION] Error ejecutando la acción masiva:', error);
       alert('Error al procesar la acción masiva en el servidor. La interfaz se sincronizará automáticamente.');
@@ -584,8 +796,12 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
     const batch = writeBatch(db);
     selectedEmailIds.forEach((id) => {
       const email = emails.find((item) => item.id === id);
-      const isSent = email ? email.direction !== 'inbound' : false;
-      const prev = isSent ? 'sent' : (email?.archived ? 'archived' : (email?.folderId || 'inbox'));
+      const isSent = email ? email.direction !== 'inbound' : activeNav === 'enviados';
+      const prev = isSent
+        ? 'sent'
+        : (email?.archived || activeNav === 'archivados'
+          ? 'archived'
+          : (email?.folderId || activeFolderId || 'inbox'));
 
       batch.update(doc(db, 'emails', id), {
         deleted: true,
@@ -597,6 +813,7 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       await batch.commit();
       setSelectedEmailIds([]);
+      void refreshCounts();
     } catch (error) {
       console.error('Error bulk moving to trash:', error);
       throw error;
@@ -615,6 +832,7 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       await batch.commit();
       setSelectedEmailIds([]);
+      void refreshCounts();
     } catch (error) {
       console.error('Error bulk deleting forever:', error);
       throw error;
@@ -660,6 +878,7 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       await batch.commit();
       setSelectedEmailIds([]);
+      void refreshCounts();
     } catch (error) {
       console.error('Error bulk restoring:', error);
       throw error;
