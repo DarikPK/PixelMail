@@ -258,8 +258,10 @@ async function sendNotificationToUser(userId, payload) {
   }
 }
 
-exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) => {
-  applyCors(req, res, "POST, OPTIONS");
+exports.sendEmail = onRequest(
+  { memory: "512MiB", secrets: ["RESEND_API_KEY"] },
+  async (req, res) => {
+    applyCors(req, res, "POST, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.status(204).send("");
@@ -833,3 +835,5 @@ exports.getAttachment = onRequest({
     return res.status(500).json({ error: error.message });
   }
 });
+
+
