@@ -708,7 +708,7 @@ exports.sendTestPush = onRequest({ region: "us-central1" }, async (req, res) => 
 
 exports.getAttachment = onRequest({
   region: "us-central1",
-  secrets: ["RESEND_RECEIVING_API_KEY"]
+  secrets: ["RESEND_API_KEY", "RESEND_RECEIVING_API_KEY"]
 }, async (req, res) => {
   applyCors(req, res, "GET, OPTIONS");
 
@@ -732,30 +732,71 @@ exports.getAttachment = onRequest({
     return res.status(400).json({ error: "Missing emailId and attachment identifier" });
   }
 
-  const receivingApiKey = process.env.RESEND_RECEIVING_API_KEY;
-  if (!receivingApiKey) {
+  const sources = [];
+  if (process.env.RESEND_RECEIVING_API_KEY) {
+    const receivingResend = new Resend(process.env.RESEND_RECEIVING_API_KEY);
+    sources.push({ name: "received", api: receivingResend.emails.receiving.attachments });
+  }
+  if (process.env.RESEND_API_KEY) {
+    const sendingResend = new Resend(process.env.RESEND_API_KEY);
+    sources.push({ name: "sent", api: sendingResend.emails.attachments });
+  }
+
+  if (sources.length === 0) {
     return res.status(500).json({ error: "Configuration Error" });
   }
 
   try {
-    const resend = new Resend(receivingApiKey);
-    let attachment;
+    let attachment = null;
+    let lastLookupError = null;
 
-    if (attachmentId) {
-      const { data, error } = await resend.emails.receiving.attachments.get({
-        id: attachmentId,
-        emailId
-      });
-      if (error) throw new Error(error.message);
-      attachment = data;
-    } else {
-      const { data, error } = await resend.emails.receiving.attachments.list({ emailId });
-      if (error) throw new Error(error.message);
-      const attachments = normalizeAttachmentList(data);
-      attachment = attachments.find((item) => item.filename === filename);
+    for (const source of sources) {
+      try {
+        if (attachmentId) {
+          const { data, error } = await source.api.get({ id: attachmentId, emailId });
+          if (!error && data) {
+            attachment = data;
+            break;
+          }
+          if (error) lastLookupError = error;
+        }
+
+        if (filename) {
+          const { data, error } = await source.api.list({ emailId });
+          if (error) {
+            lastLookupError = error;
+            continue;
+          }
+
+          const attachments = normalizeAttachmentList(data);
+          const match = attachments.find((item) => item.filename === filename);
+          if (match) {
+            // La lista ya incluye una URL firmada en SDKs actuales. Si no la
+            // incluyera, recuperar el detalle garantiza una URL descargable.
+            if (match.download_url || match.downloadUrl) {
+              attachment = match;
+            } else if (match.id) {
+              const detail = await source.api.get({ id: match.id, emailId });
+              if (!detail.error && detail.data) {
+                attachment = detail.data;
+              } else if (detail.error) {
+                lastLookupError = detail.error;
+              }
+            }
+            if (attachment) break;
+          }
+        }
+      } catch (lookupError) {
+        // Un ID puede pertenecer a un correo recibido o enviado. Probar la otra
+        // fuente antes de considerar el adjunto inexistente.
+        lastLookupError = lookupError;
+      }
     }
 
     if (!attachment) {
+      if (lastLookupError) {
+        logger.info("[RESEND ATTACHMENT] Adjunto no encontrado en fuentes disponibles", lastLookupError);
+      }
       return res.status(404).json({ error: "Attachment not found" });
     }
 
