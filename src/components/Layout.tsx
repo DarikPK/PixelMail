@@ -639,7 +639,7 @@ const Layout = () => {
 
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 0.5 }}>
           <Typography variant="caption" sx={{ color: '#6F7A8A', fontWeight: 600, fontSize: '10.5px' }}>
-            versión 10.6
+            versión 10.7
           </Typography>
         </Box>
       </Box>
@@ -1190,3 +1190,4 @@ const Layout = () => {
 };
 
 export default Layout;
+
