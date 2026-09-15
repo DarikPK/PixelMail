@@ -17,7 +17,7 @@ import {
   Delete,
   DeleteOutlined as DeleteIcon
 } from '@mui/icons-material';
-import { useMemo } from 'react';
+import { useMemo, type MouseEvent } from 'react';
 import { db } from '../config/firebase';
 import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useEmails } from '../contexts/EmailContext';
@@ -72,7 +72,7 @@ const Enviados = () => {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }, [allEmails]);
 
-  const handleDeleteSent = async (e: React.MouseEvent, emailId: string) => {
+  const handleDeleteSent = async (e: MouseEvent, emailId: string) => {
     e.stopPropagation();
     if (!window.confirm('¿Deseas mover este correo enviado a la papelera?')) return;
 
