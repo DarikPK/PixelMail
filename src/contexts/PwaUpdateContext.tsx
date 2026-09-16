@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { registerSW } from 'virtual:pwa-register';
 
 export type UpdateSafetyState = {
@@ -20,8 +20,7 @@ interface PwaUpdateContextType {
 
 const PwaUpdateContext = createContext<PwaUpdateContextType | undefined>(undefined);
 
-// Garantizar que la recarga solo ocurra exactamente una vez
-let hasReloadedForUpdate = false;
+const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
 export const PwaUpdateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [safetyState, setSafetyStateRaw] = useState<UpdateSafetyState>({
@@ -35,113 +34,136 @@ export const PwaUpdateProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const [updatePending, setUpdatePending] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
-  const [swRegistration, setSwRegistration] = useState<ServiceWorkerRegistration | null>(null);
+  const updateSWRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null);
+  const activatingRef = useRef(false);
 
   const setSafetyState = (
     updater: Partial<UpdateSafetyState> | ((prev: UpdateSafetyState) => UpdateSafetyState)
   ) => {
-    setSafetyStateRaw((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : { ...prev, ...updater };
-      return next;
-    });
+    setSafetyStateRaw((prev) => (
+      typeof updater === 'function' ? updater(prev) : { ...prev, ...updater }
+    ));
   };
 
-  // Verificar si el estado actual es seguro para actualizar
-  const isSafeToUpdate = () => {
-    return (
-      !safetyState.isComposing &&
-      !safetyState.isSignatureEditing &&
-      !safetyState.hasUnsavedChanges &&
-      !safetyState.isUploading &&
-      !safetyState.isSending &&
-      !safetyState.isSavingDraft
-    );
-  };
+  const isSafeToUpdate = () => (
+    !safetyState.isComposing &&
+    !safetyState.isSignatureEditing &&
+    !safetyState.hasUnsavedChanges &&
+    !safetyState.isUploading &&
+    !safetyState.isSending &&
+    !safetyState.isSavingDraft
+  );
 
   useEffect(() => {
-    // Registrar el Service Worker desde el punto de entrada mediante virtual:pwa-register
-    registerSW({
-      immediate: true,
-      onRegisteredSW(swUrl, registration) {
-        console.log('[PWA] Service Worker registrado:', swUrl);
-        if (registration) {
-          setSwRegistration(registration);
+    let intervalId: number | null = null;
+    let onlineHandler: (() => void) | null = null;
+    let visibilityHandler: (() => void) | null = null;
+    let registrationRef: ServiceWorkerRegistration | undefined;
+    let checkingUpdate = false;
 
-          // Verificar periódicamente si hay actualizaciones
-          setInterval(() => {
-            registration.update().catch(err => console.error('[PWA] Error actualizando:', err));
-          }, 60 * 1000); // Cada minuto
+    const checkForUpdate = async () => {
+      if (!registrationRef || checkingUpdate) return;
+      if (!navigator.onLine || document.visibilityState === 'hidden') return;
+
+      checkingUpdate = true;
+      try {
+        await registrationRef.update();
+      } catch (error) {
+        // Una pérdida temporal de red no es un error de la aplicación.
+        if (navigator.onLine) {
+          console.warn('[PWA] No se pudo comprobar una actualización en este momento.', error);
         }
-      },
-      onRegisterError(error) {
-        console.error('[PWA] Error de Service Worker:', error);
-      }
-    });
-
-    // Agregar el listener controllerchange para recargar exactamente una vez
-    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-      const handleControllerChange = () => {
-        if (hasReloadedForUpdate) return;
-        hasReloadedForUpdate = true;
-
-        // Guardar bandera en sessionStorage para mostrar mensaje de éxito tras recargar
-        sessionStorage.setItem('pixelmail_just_updated', 'true');
-        console.log('[PWA] Nueva versión activada. Recargando página...');
-        window.location.reload();
-      };
-
-      navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
-      return () => {
-        navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
-      };
-    }
-  }, []);
-
-  // Mostrar aviso de éxito si acaba de actualizarse
-  useEffect(() => {
-    if (sessionStorage.getItem('pixelmail_just_updated') === 'true') {
-      sessionStorage.removeItem('pixelmail_just_updated');
-      setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 5000);
-    }
-  }, []);
-
-  // Escuchar cuando el Service Worker tiene una versión en waiting
-  useEffect(() => {
-    if (!swRegistration) return;
-
-    const checkWaitingSW = () => {
-      const waiting = swRegistration.waiting;
-      if (waiting) {
-        setUpdatePending(true);
-
-        if (isSafeToUpdate()) {
-          console.log('[PWA] Estado seguro. Activando Service Worker inmediatamente...');
-          waiting.postMessage({ type: 'SKIP_WAITING' });
-        } else {
-          console.log('[PWA] Actualización aplazada debido a cambios sin guardar o redacción activa.');
-        }
+      } finally {
+        checkingUpdate = false;
       }
     };
 
-    // Escuchar el evento updatefound
-    swRegistration.addEventListener('updatefound', () => {
-      const installing = swRegistration.installing;
-      if (installing) {
-        installing.addEventListener('statechange', () => {
-          if (installing.state === 'installed') {
-            checkWaitingSW();
+    const updateSW = registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        setUpdatePending(true);
+      },
+      onOfflineReady() {
+        console.info('[PWA] Pixel Mail está listo para abrirse sin conexión.');
+      },
+      onRegisteredSW(swUrl, registration) {
+        registrationRef = registration;
+        console.info('[PWA] Service Worker registrado:', swUrl);
+
+        if (!registration) return;
+
+        onlineHandler = () => {
+          void checkForUpdate();
+        };
+        visibilityHandler = () => {
+          if (document.visibilityState === 'visible') {
+            void checkForUpdate();
           }
-        });
+        };
+
+        window.addEventListener('online', onlineHandler);
+        document.addEventListener('visibilitychange', visibilityHandler);
+
+        intervalId = window.setInterval(() => {
+          void checkForUpdate();
+        }, UPDATE_CHECK_INTERVAL_MS);
+      },
+      onRegisterError(error) {
+        if (navigator.onLine) {
+          console.warn('[PWA] No se pudo registrar el Service Worker.', error);
+        } else {
+          console.info('[PWA] Registro del Service Worker aplazado hasta recuperar conexión.');
+        }
       }
     });
 
-    // Verificar el estado inicial
-    checkWaitingSW();
-  }, [swRegistration, safetyState]);
+    updateSWRef.current = updateSW;
+
+    return () => {
+      updateSWRef.current = null;
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
+      if (onlineHandler) {
+        window.removeEventListener('online', onlineHandler);
+      }
+      if (visibilityHandler) {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!updatePending || !isSafeToUpdate()) return;
+    if (!updateSWRef.current || activatingRef.current) return;
+
+    activatingRef.current = true;
+    sessionStorage.setItem('pixelmail_just_updated', 'true');
+
+    updateSWRef.current(true)
+      .catch((error) => {
+        sessionStorage.removeItem('pixelmail_just_updated');
+        activatingRef.current = false;
+        if (navigator.onLine) {
+          console.warn('[PWA] La actualización quedó pendiente y se reintentará más adelante.', error);
+        }
+      });
+  }, [updatePending, safetyState]);
+
+  useEffect(() => {
+    if (sessionStorage.getItem('pixelmail_just_updated') !== 'true') return;
+
+    sessionStorage.removeItem('pixelmail_just_updated');
+    setShowSuccessToast(true);
+    const timeoutId = window.setTimeout(() => setShowSuccessToast(false), 5000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   return (
-    <PwaUpdateContext.Provider value={{ safetyState, setSafetyState, updatePending, showSuccessToast, setShowSuccessToast }}>
+    <PwaUpdateContext.Provider
+      value={{ safetyState, setSafetyState, updatePending, showSuccessToast, setShowSuccessToast }}
+    >
       {children}
     </PwaUpdateContext.Provider>
   );

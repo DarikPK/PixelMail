@@ -7,7 +7,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // Pixel Mail decide cuándo activar una versión nueva para no interrumpir
+      // redacciones, cargas, envíos o cambios sin guardar.
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
         name: 'Pixel Mail',
@@ -17,8 +19,8 @@ export default defineConfig({
         scope: '/',
         display: 'standalone',
         orientation: 'any',
-        theme_color: '#3B82F6', // Color principal real de Pixel Mail (#3B82F6)
-        background_color: '#0F1117', // Fondo real de la pantalla inicial de Pixel Mail (#0F1117)
+        theme_color: '#3B82F6',
+        background_color: '#0F1117',
         lang: 'es-PE',
         categories: ['productivity', 'business', 'utilities'],
         icons: [
@@ -49,34 +51,35 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        skipWaiting: true,
-        // Excluimos explícitamente llamadas privadas o dinámicas
+        // Debe permanecer en false: la activación la controla PwaUpdateContext.
+        skipWaiting: false,
         navigateFallbackDenylist: [
-          /^\/__/, // Rutas internas de Firebase
-          /^\/api/, // Llamadas locales a APIs o Cloud Functions
+          /^\/__/,
+          /^\/api/,
           /https:\/\/firebasestorage\.googleapis\.com/,
           /https:\/\/firestore\.googleapis\.com/,
           /https:\/\/resend\.com/
         ],
         runtimeCaching: [
           {
-            // Cache First para recursos estáticos versionados y de terceros estables (ej. fuentes de Google si existieran o iconos de SVGs públicos)
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|woff2?|eot|ttf)$/,
             handler: 'CacheFirst',
             options: {
               cacheName: 'pixelmail-assets-cache',
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 días
+                maxAgeSeconds: 30 * 24 * 60 * 60,
               },
             },
           },
           {
-            // NetworkOnly para endpoints privados de correos, autenticación, storage, funciones de base de datos
+            // Datos privados y operaciones dinámicas nunca se sirven desde Workbox.
+            // Firestore maneja su propia caché persistente.
             urlPattern: ({ url }) => {
               return (
                 url.hostname.includes('firestore.googleapis.com') ||
                 url.hostname.includes('identitytoolkit.googleapis.com') ||
+                url.hostname.includes('securetoken.googleapis.com') ||
                 url.hostname.includes('firebasestorage.googleapis.com') ||
                 url.pathname.includes('/sendEmail') ||
                 url.pathname.includes('/getAttachment')

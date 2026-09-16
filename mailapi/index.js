@@ -7,6 +7,23 @@ const crypto = require("crypto");
 
 admin.initializeApp();
 
+const ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "https://pixel-mail-a78f6.web.app",
+  "https://pixel-mail-a78f6.firebaseapp.com",
+  "https://mail.pixel.com.pe"
+];
+
+function applyCors(req, res, methods) {
+  const origin = req.headers.origin;
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", methods);
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+}
+
 function parseMultipart(req) {
   return new Promise((resolve, reject) => {
     try {
@@ -21,80 +38,122 @@ function parseMultipart(req) {
       busboy.on("file", (fieldname, file, info) => {
         const { filename, encoding, mimeType } = info;
         const chunks = [];
+
         file.on("data", (chunk) => {
           chunks.push(chunk);
         });
+
         file.on("end", () => {
           const buffer = Buffer.concat(chunks);
           files.push({
             fieldname,
-            originalname: filename,
+            originalname: filename || "adjunto",
             encoding,
-            mimetype: mimeType,
+            mimetype: mimeType || "application/octet-stream",
             buffer,
             size: buffer.length,
           });
         });
       });
 
-      busboy.on("finish", () => {
-        resolve({ fields, files });
-      });
-
-      busboy.on("error", (err) => {
-        reject(err);
-      });
+      busboy.on("finish", () => resolve({ fields, files }));
+      busboy.on("error", reject);
 
       if (req.rawBody) {
         busboy.end(req.rawBody);
       } else {
         req.pipe(busboy);
       }
-    } catch (err) {
-      reject(err);
+    } catch (error) {
+      reject(error);
     }
   });
 }
 
+function normalizeAddress(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => typeof item === "string" && item.trim())
+      .map((item) => item.trim());
+  }
+  if (typeof value === "string") {
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeAttachmentList(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.data)) return payload.data;
+  return [];
+}
+
+function firstQueryValue(value) {
+  if (Array.isArray(value)) return value[0];
+  if (value === undefined || value === null) return "";
+  return String(value);
+}
+
+async function verifyFirebaseUser(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const idToken = authHeader.slice("Bearer ".length);
+  try {
+    return await admin.auth().verifyIdToken(idToken);
+  } catch {
+    return null;
+  }
+}
+
 async function resolveUserId(toEmail) {
+  if (!toEmail) return null;
+
   try {
     const userRecord = await admin.auth().getUserByEmail(toEmail);
     return userRecord.uid;
-  } catch (error) {
-    // Si la coincidencia exacta falla, intentamos coincidencia por prefijo
-    const prefix = toEmail.split('@')[0].toLowerCase();
+  } catch {
+    const prefix = toEmail.split("@")[0].toLowerCase();
+
     try {
       const listUsersResult = await admin.auth().listUsers();
       for (const userRecord of listUsersResult.users) {
-        if (userRecord.email) {
-          const userPrefix = userRecord.email.split('@')[0].toLowerCase();
-          if (userPrefix === prefix || userPrefix.startsWith(prefix) || prefix.startsWith(userPrefix)) {
-            return userRecord.uid;
-          }
+        if (!userRecord.email) continue;
+        const userPrefix = userRecord.email.split("@")[0].toLowerCase();
+        if (
+          userPrefix === prefix ||
+          userPrefix.startsWith(prefix) ||
+          prefix.startsWith(userPrefix)
+        ) {
+          return userRecord.uid;
         }
       }
     } catch (listError) {
       logger.error("[RESEND INBOUND] Error al listar usuarios", listError);
     }
   }
-  // Alternativa por defecto: asignar al primer usuario que encontremos en Auth
+
+  // Se conserva el comportamiento histórico de Pixel Mail para no perder correos
+  // cuando existe una única cuenta y el alias entrante no coincide exactamente.
   try {
     const listUsersResult = await admin.auth().listUsers(1);
     if (listUsersResult.users.length > 0) {
       return listUsersResult.users[0].uid;
     }
-  } catch (e) {
-    logger.error("[RESEND INBOUND] Fallback para listar usuarios fallido", e);
+  } catch (error) {
+    logger.error("[RESEND INBOUND] Fallback para listar usuarios fallido", error);
   }
+
   return null;
 }
 
-// Servicio centralizado de envío de notificaciones push de Firebase (FCM)
 async function sendNotificationToUser(userId, payload) {
   if (!userId) return;
 
   try {
-    // 1. Consultar preferencias de notificaciones del usuario
     const userSnap = await admin.firestore().collection("users").doc(userId).get();
     const userData = userSnap.exists ? userSnap.data() : null;
     const notifPrefs = userData?.notifications || {
@@ -108,25 +167,19 @@ async function sendNotificationToUser(userId, payload) {
       showSubject: true
     };
 
-    // Si están desactivadas globalmente, no enviar nada
-    if (!notifPrefs.enabled) {
-      logger.log(`[FCM] Notificaciones desactivadas globalmente para el usuario ${userId}`);
-      return;
-    }
+    if (!notifPrefs.enabled) return;
 
-    // Filtrar por categorías específicas según el tipo de payload
     const type = payload.data?.type;
-    if (type === 'inbound_email' && !notifPrefs.inboundEmail) return;
-    if (type === 'outbound_success' && !notifPrefs.outboundSuccess) return;
-    if (type === 'outbound_error' && !notifPrefs.outboundError) return;
+    if (type === "inbound_email" && !notifPrefs.inboundEmail) return;
+    if (type === "outbound_success" && !notifPrefs.outboundSuccess) return;
+    if (type === "outbound_error" && !notifPrefs.outboundError) return;
 
-    // 2. Aplicar preferencias de privacidad en la pantalla bloqueada
     let displayTitle = payload.title;
     let displayBody = payload.body;
 
-    if (type === 'inbound_email') {
-      const sender = payload.data?.senderName || 'Alguien';
-      const subject = payload.data?.subject || '(Sin asunto)';
+    if (type === "inbound_email") {
+      const sender = payload.data?.senderName || "Alguien";
+      const subject = payload.data?.subject || "(Sin asunto)";
 
       if (!notifPrefs.showSender && !notifPrefs.showSubject) {
         displayBody = "Nuevo correo recibido. Abre Pixel Mail para verlo.";
@@ -135,13 +188,10 @@ async function sendNotificationToUser(userId, payload) {
       } else if (!notifPrefs.showSubject) {
         displayBody = `Nuevo correo de ${sender}.`;
       }
-    } else if (type === 'outbound_error') {
-      if (!notifPrefs.showSubject) {
-        displayBody = "No se pudo enviar un correo. Abre Pixel Mail para revisarlo.";
-      }
+    } else if (type === "outbound_error" && !notifPrefs.showSubject) {
+      displayBody = "No se pudo enviar un correo. Abre Pixel Mail para revisarlo.";
     }
 
-    // 3. Consultar dispositivos activos del usuario
     const devicesSnap = await admin.firestore()
       .collection("users")
       .doc(userId)
@@ -149,26 +199,20 @@ async function sendNotificationToUser(userId, payload) {
       .where("active", "==", true)
       .get();
 
-    if (devicesSnap.empty) {
-      logger.log(`[FCM] No se encontraron dispositivos activos para el usuario ${userId}`);
-      return;
-    }
+    if (devicesSnap.empty) return;
 
     const tokens = [];
     const deviceDocs = [];
-    devicesSnap.forEach(doc => {
-      const dev = doc.data();
-      if (dev.token) {
-        tokens.push(dev.token);
-        deviceDocs.push({ id: doc.id, token: dev.token });
+    devicesSnap.forEach((snapshotDoc) => {
+      const device = snapshotDoc.data();
+      if (device.token) {
+        tokens.push(device.token);
+        deviceDocs.push({ id: snapshotDoc.id, token: device.token });
       }
     });
 
     if (tokens.length === 0) return;
 
-    // 4. Enviar notificación push multicast usando Firebase Admin Messaging
-    // Enviamos únicamente el bloque 'data' con title y body para evitar que el SDK de Firebase
-    // autogenere una notificación duplicada cuando la aplicación está en segundo plano.
     const fcmMessage = {
       tokens,
       data: {
@@ -178,122 +222,112 @@ async function sendNotificationToUser(userId, payload) {
       }
     };
 
-    logger.log(`[FCM] Enviando mensaje multicast a ${tokens.length} dispositivos para el usuario ${userId}`);
     const response = await admin.messaging().sendEachForMulticast(fcmMessage);
 
-    // 5. Manejar y depurar tokens caídos o inválidos de forma auto-curativa
     if (response.failureCount > 0) {
       const batch = admin.firestore().batch();
-      response.responses.forEach((res, idx) => {
-        if (!res.success) {
-          const err = res.error;
-          const devInfo = deviceDocs[idx];
-          logger.error(`[FCM] Fallo en token para dispositivo ${devInfo.id}:`, err.code);
+      let hasUpdates = false;
 
-          // Si el token es inválido o ya no está registrado, lo desactivamos lógicamente
-          if (
-            err.code === 'messaging/invalid-registration-token' ||
-            err.code === 'messaging/registration-token-not-registered'
-          ) {
-            const devRef = admin.firestore()
-              .collection("users")
-              .doc(userId)
-              .collection("devices")
-              .doc(devInfo.id);
-            batch.update(devRef, { active: false, notificationsEnabled: false });
-          }
+      response.responses.forEach((result, index) => {
+        if (result.success) return;
+
+        const error = result.error;
+        const device = deviceDocs[index];
+        logger.warn(`[FCM] Fallo en token para dispositivo ${device.id}:`, error?.code);
+
+        if (
+          error?.code === "messaging/invalid-registration-token" ||
+          error?.code === "messaging/registration-token-not-registered"
+        ) {
+          const deviceRef = admin.firestore()
+            .collection("users")
+            .doc(userId)
+            .collection("devices")
+            .doc(device.id);
+          batch.update(deviceRef, { active: false, notificationsEnabled: false });
+          hasUpdates = true;
         }
       });
-      await batch.commit();
-      logger.log(`[FCM] Limpieza de tokens inválidos completada para el usuario ${userId}`);
-    }
 
-  } catch (e) {
-    logger.error("[FCM] Error general en el servicio de notificaciones:", e);
+      if (hasUpdates) {
+        await batch.commit();
+      }
+    }
+  } catch (error) {
+    logger.error("[FCM] Error general en el servicio de notificaciones", error);
   }
 }
 
-exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) => {
-  const allowedOrigins = [
-    "http://localhost:5173",
-    "https://pixel-mail-a78f6.web.app",
-    "https://pixel-mail-a78f6.firebaseapp.com",
-    "https://mail.pixel.com.pe"
-  ];
-  const origin = req.headers.origin;
-
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    logger.log("[CORS] origin", origin);
-  }
-
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+exports.sendEmail = onRequest(
+  { memory: "512MiB", secrets: ["RESEND_API_KEY"] },
+  async (req, res) => {
+    applyCors(req, res, "POST, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.status(204).send("");
   }
-
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  const idToken = authHeader.split("Bearer ")[1];
-  let decodedToken;
-  try {
-    decodedToken = await admin.auth().verifyIdToken(idToken);
-    logger.log("[AUTH] token verified", decodedToken.email);
-  } catch (error) {
-    logger.error("[AUTH] error", error);
+  const decodedToken = await verifyFirebaseUser(req);
+  if (!decodedToken) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   const userId = decodedToken.uid;
   const userEmail = decodedToken.email || "david.lachira@pixel.com.pe";
 
-  let to, subject, html, cc, bcc, emailId;
+  let to;
+  let subject;
+  let html;
+  let text;
+  let cc;
+  let bcc;
+  let emailId;
   let uploadedFiles = [];
+  let inlineMetadata = [];
 
   const contentType = req.headers["content-type"] || "";
-  let inlineMetadata = [];
   if (contentType.includes("multipart/form-data")) {
     try {
       const parsed = await parseMultipart(req);
       to = parsed.fields.to;
       subject = parsed.fields.subject;
       html = parsed.fields.html;
+      text = parsed.fields.text;
       cc = parsed.fields.cc;
       bcc = parsed.fields.bcc;
       emailId = parsed.fields.emailId;
       uploadedFiles = parsed.files || [];
+
       if (parsed.fields.inlineMetadata) {
         try {
-          inlineMetadata = JSON.parse(parsed.fields.inlineMetadata);
-        } catch (e) {
-          logger.error("[RESEND] Error parsing inlineMetadata", e);
+          const parsedMetadata = JSON.parse(parsed.fields.inlineMetadata);
+          inlineMetadata = Array.isArray(parsedMetadata) ? parsedMetadata : [];
+        } catch (error) {
+          logger.warn("[RESEND] inlineMetadata inválido; se enviará sin metadatos inline", error);
         }
       }
-    } catch (parseError) {
-      logger.error("[BUSBOY] parsing error", parseError);
-      return res.status(400).json({ error: "Error parsing form-data: " + parseError.message });
+    } catch (error) {
+      logger.error("[BUSBOY] Error procesando multipart", error);
+      return res.status(400).json({ error: `Error parsing form-data: ${error.message}` });
     }
   } else {
-    ({ to, subject, html, cc, bcc, emailId } = req.body || {});
+    ({ to, subject, html, text, cc, bcc, emailId } = req.body || {});
   }
 
-  if (!to || !subject || !html) {
-    return res.status(400).json({
-      error: "Missing parameters"
-    });
+  const recipients = normalizeAddress(to);
+  const ccRecipients = normalizeAddress(cc);
+  const bccRecipients = normalizeAddress(bcc);
+
+  if (recipients.length === 0 || !subject || !html) {
+    return res.status(400).json({ error: "Missing parameters" });
   }
 
-  // 1. Guardar o actualizar estado en Firestore como "sending"
+  const isNewEmail = !emailId;
   let docRef;
+
   if (emailId) {
     docRef = admin.firestore().collection("emails").doc(emailId);
   } else {
@@ -301,138 +335,153 @@ exports.sendEmail = onRequest({ secrets: ["RESEND_API_KEY"] }, async (req, res) 
     emailId = docRef.id;
   }
 
+  const attachmentsMetadata = uploadedFiles.map((file) => {
+    const meta = inlineMetadata.find((item) => item?.filename === file.originalname);
+    return {
+      name: file.originalname,
+      size: file.size,
+      contentType: file.mimetype,
+      ...(meta ? {
+        contentDisposition: meta.disposition || null,
+        contentId: meta.contentId || null
+      } : {})
+    };
+  });
+
   const emailPayloadDoc = {
     userId,
     from: userEmail,
-    to: [to],
-    cc: cc ? (Array.isArray(cc) ? cc : cc.split(",").map(e => e.trim()).filter(Boolean)) : [],
-    bcc: bcc ? (Array.isArray(bcc) ? bcc : bcc.split(",").map(e => e.trim()).filter(Boolean)) : [],
+    to: recipients,
+    cc: ccRecipients,
+    bcc: bccRecipients,
     subject,
     body: html,
+    html,
+    text: text || "",
     status: "sending",
-    attachments: uploadedFiles.map(f => {
-      const meta = inlineMetadata.find(m => m.filename === f.originalname);
-      return {
-        name: f.originalname,
-        size: f.size,
-        contentType: f.mimetype,
-        ...(meta ? { contentDisposition: meta.disposition, contentId: meta.contentId } : {})
-      };
-    }),
+    attachments: attachmentsMetadata,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     direction: "outbound"
   };
 
-  if (!emailId) {
+  if (isNewEmail) {
     emailPayloadDoc.createdAt = admin.firestore.FieldValue.serverTimestamp();
   }
 
   try {
     await docRef.set(emailPayloadDoc, { merge: true });
-  } catch (dbErr) {
-    logger.error("[DB ERROR] Error salvando estado de envío inicial", dbErr);
+  } catch (error) {
+    // El correo aún puede enviarse aunque Firestore tenga un fallo transitorio.
+    logger.error("[DB] No se pudo guardar el estado inicial del envío", error);
   }
 
-  // 2. Enviar usando Resend
   const resend = new Resend(process.env.RESEND_API_KEY);
+  const resendPayload = {
+    from: `Pixel Mail <${userEmail}>`,
+    to: recipients,
+    subject,
+    html,
+    replyTo: userEmail
+  };
 
+  if (text) resendPayload.text = text;
+  if (ccRecipients.length > 0) resendPayload.cc = ccRecipients;
+  if (bccRecipients.length > 0) resendPayload.bcc = bccRecipients;
+
+  if (uploadedFiles.length > 0) {
+    resendPayload.attachments = uploadedFiles.map((file) => {
+      const meta = inlineMetadata.find((item) => item?.filename === file.originalname);
+      const attachment = {
+        filename: file.originalname,
+        content: file.buffer,
+        contentType: file.mimetype,
+      };
+
+      if (meta?.contentId) {
+        attachment.contentId = meta.contentId;
+      }
+      return attachment;
+    });
+  }
+
+  let providerData;
   try {
-    const emailPayload = {
-      from: `Pixel Mail <${userEmail}>`,
-      to: [to],
-      subject: subject,
-      html: html,
-      reply_to: userEmail
-    };
-
-    if (cc) {
-      emailPayload.cc = Array.isArray(cc) ? cc : cc.split(",").map(e => e.trim()).filter(Boolean);
-    }
-    if (bcc) {
-      emailPayload.bcc = Array.isArray(bcc) ? bcc : bcc.split(",").map(e => e.trim()).filter(Boolean);
-    }
-
-    if (uploadedFiles.length > 0) {
-      emailPayload.attachments = uploadedFiles.map((file) => {
-        const meta = inlineMetadata.find(m => m.filename === file.originalname);
-        const att = {
-          filename: file.originalname,
-          content: file.buffer,
-          contentType: file.mimetype,
-        };
-        if (meta) {
-          if (meta.contentId) {
-            att.content_id = meta.contentId;
-            att.contentId = meta.contentId;
-          }
-          if (meta.disposition) {
-            att.disposition = meta.disposition;
-          }
-        }
-        return att;
-      });
-    }
-
-    const { data, error } = await resend.emails.send(emailPayload);
-
+    const { data, error } = await resend.emails.send(resendPayload);
     if (error) {
       throw new Error(error.message || "Error de Resend");
     }
-
-    // 3. Flujo exitoso: actualizar Firestore a "sent" y notificar push
-    await docRef.update({
-      status: "sent",
-      providerMessageId: data.id,
-      sentAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    // Enviar notificación push de envío exitoso de forma asíncrona
-    sendNotificationToUser(userId, {
-      title: "Correo enviado",
-      body: `Enviado a ${to}\nAsunto: ${subject}`,
-      data: {
-        type: "outbound_success",
-        emailId: emailId,
-        userId: userId,
-        recipient: to,
-        subject: subject,
-        route: `/enviados`
-      }
-    });
-
-    return res.status(200).json({ success: true, id: data.id });
-
+    if (!data?.id) {
+      throw new Error("Resend no devolvió un identificador de envío");
+    }
+    providerData = data;
   } catch (error) {
-    logger.error("[RESEND FAIL]", error);
+    logger.error("[RESEND] Falló el envío", error);
 
-    // 4. Flujo con error: actualizar Firestore a "failed" y notificar push
-    await docRef.update({
-      status: "failed",
-      lastErrorCode: "RESEND_ERROR",
-      lastErrorMessage: error.message || "Error al enviar el correo",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    try {
+      await docRef.set({
+        status: "failed",
+        lastErrorCode: "RESEND_ERROR",
+        lastErrorMessage: error.message || "Error al enviar el correo",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch (dbError) {
+      logger.error("[DB] Tampoco se pudo guardar el estado failed", dbError);
+    }
 
-    // Enviar notificación push de error de forma asíncrona (con requireInteraction para llamar la atención del usuario)
-    sendNotificationToUser(userId, {
+    void sendNotificationToUser(userId, {
       title: "No se pudo enviar el correo",
-      body: `Mensaje para ${to}\nToca para revisar y volver a intentar.`,
+      body: `Mensaje para ${recipients.join(", ")}\nToca para revisar y volver a intentar.`,
       data: {
         type: "outbound_error",
-        emailId: emailId,
-        userId: userId,
-        recipient: to,
-        subject: subject,
+        emailId,
+        userId,
+        recipient: recipients.join(", "),
+        subject,
         route: `/redactar?replyTo=${emailId}`
       }
     });
 
     return res.status(500).json({ error: error.message || "Error al procesar el envío" });
   }
+
+  // Un fallo de Firestore después de que Resend aceptó el mensaje no debe hacer que
+  // el frontend crea que el correo no salió y lo reenvíe duplicado.
+  try {
+    await docRef.set({
+      status: "sent",
+      providerMessageId: providerData.id,
+      resendEmailId: providerData.id,
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    logger.error("[DB] Resend confirmó el envío, pero no se pudo actualizar Firestore", error);
+  }
+
+  void sendNotificationToUser(userId, {
+    title: "Correo enviado",
+    body: `Enviado a ${recipients.join(", ")}\nAsunto: ${subject}`,
+    data: {
+      type: "outbound_success",
+      emailId,
+      userId,
+      recipient: recipients.join(", "),
+      subject,
+      route: "/enviados"
+    }
+  });
+
+  return res.status(200).json({
+    success: true,
+    id: providerData.id,
+    emailId
+  });
 });
 
-exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "RESEND_RECEIVING_API_KEY"] }, async (req, res) => {
+exports.resendInboundWebhook = onRequest({
+  region: "us-central1",
+  secrets: ["RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "RESEND_RECEIVING_API_KEY"]
+}, async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
@@ -451,32 +500,29 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
   }
 
   const rawBody = req.rawBody ? req.rawBody.toString("utf8") : "";
-
   let isValid = false;
+
   try {
     let secretKey = secret.trim();
     if (secretKey.startsWith("whsec_")) {
       secretKey = secretKey.substring(6);
     }
+
     const secretBuffer = Buffer.from(secretKey, "base64");
     const toSign = `${svixId}.${svixTimestamp}.${rawBody}`;
-
     const hmac = crypto.createHmac("sha256", secretBuffer);
     hmac.update(toSign);
     const computedSignature = hmac.digest("base64");
 
-    const parts = svixSignature.split(" ");
-    for (const part of parts) {
-      const kv = part.split(",");
-      if (kv.length === 2 && kv[0] === "v1") {
-        if (kv[1] === computedSignature) {
-          isValid = true;
-          break;
-        }
+    for (const part of svixSignature.split(" ")) {
+      const pair = part.split(",");
+      if (pair.length === 2 && pair[0] === "v1" && pair[1] === computedSignature) {
+        isValid = true;
+        break;
       }
     }
-  } catch (verifyError) {
-    logger.error("[WEBHOOK SIGNATURE ERROR]", verifyError);
+  } catch (error) {
+    logger.error("[WEBHOOK] Error verificando firma", error);
   }
 
   if (!isValid) {
@@ -484,9 +530,7 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
   }
 
   const verifiedEvent = req.body || {};
-  const eventType = verifiedEvent.type;
-
-  if (eventType !== "email.received") {
+  if (verifiedEvent.type !== "email.received") {
     return res.status(200).json({ success: true, ignored: true });
   }
 
@@ -499,7 +543,6 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
     return res.status(400).json({ error: "Bad Request" });
   }
 
-  // Idempotencia
   const docRef = admin.firestore().collection("emails").doc(emailId);
   const docSnap = await docRef.get();
   if (docSnap.exists) {
@@ -513,14 +556,18 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
 
   const receivingResend = new Resend(receivingApiKey);
   let emailContent;
+
   try {
     const { data, error } = await receivingResend.emails.receiving.get(emailId);
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
     emailContent = data;
-  } catch (fetchError) {
-    return res.status(500).json({ error: fetchError.message });
+  } catch (error) {
+    logger.error("[RESEND INBOUND] No se pudo obtener el contenido", error);
+    return res.status(500).json({ error: error.message });
+  }
+
+  if (!emailContent) {
+    return res.status(502).json({ error: "Received email content unavailable" });
   }
 
   const from = emailContent.from || "";
@@ -531,42 +578,53 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
   const html = emailContent.html || "";
   const text = emailContent.text || "";
   const headers = emailContent.headers || {};
-  const rawAttachments = emailContent.attachments || [];
+  const rawAttachments = Array.isArray(emailContent.attachments) ? emailContent.attachments : [];
   const createdAtString = emailContent.created_at || new Date().toISOString();
 
   let fromName = "";
   let fromEmail = from;
-  const match = from.match(/^(.*?)\s*<(.*?)>$/);
-  if (match) {
-    fromName = match[1].trim().replace(/^["']|["']$/g, "");
-    fromEmail = match[2].trim();
+  const fromMatch = from.match(/^(.*?)\s*<(.*?)>$/);
+  if (fromMatch) {
+    fromName = fromMatch[1].trim().replace(/^["']|["']$/g, "");
+    fromEmail = fromMatch[2].trim();
   }
-
-  const normalizeAddress = (val) => {
-    if (!val) return [];
-    if (Array.isArray(val)) return val.map(v => v.trim());
-    if (typeof val === "string") return val.split(",").map(v => v.trim()).filter(Boolean);
-    return [];
-  };
 
   const normalizedTo = normalizeAddress(to);
   const normalizedCc = normalizeAddress(cc);
   const normalizedBcc = normalizeAddress(bcc);
 
-  const attachmentsMeta = rawAttachments.map(att => ({
-    id: att.id || att.filename,
-    name: att.filename,
-    size: att.size || 0,
-    contentType: att.content_type || ""
+  // La ficha del correo recibido no siempre incluye tamaño. La API de adjuntos sí,
+  // por eso enriquecemos los metadatos una vez al recibir el mensaje.
+  let attachmentDetails = [];
+  if (rawAttachments.length > 0) {
+    try {
+      const { data, error } = await receivingResend.emails.receiving.attachments.list({ emailId });
+      if (error) throw new Error(error.message);
+      attachmentDetails = normalizeAttachmentList(data);
+    } catch (error) {
+      logger.warn("[RESEND INBOUND] No se pudieron enriquecer los adjuntos; se usará metadata básica", error);
+    }
+  }
+
+  const attachmentSource = attachmentDetails.length > 0 ? attachmentDetails : rawAttachments;
+  const attachmentsMeta = attachmentSource.map((attachment) => ({
+    id: attachment.id || attachment.filename,
+    name: attachment.filename || "Adjunto",
+    size: Number.isFinite(attachment.size) ? attachment.size : 0,
+    contentType: attachment.content_type || "",
+    contentDisposition: attachment.content_disposition || null,
+    contentId: attachment.content_id || null
   }));
 
   const targetEmail = normalizedTo[0] || "";
   const userId = await resolveUserId(targetEmail);
+  const parsedReceivedAt = new Date(createdAtString);
+  const receivedAt = Number.isNaN(parsedReceivedAt.getTime()) ? new Date() : parsedReceivedAt;
 
   const emailDoc = {
     userId,
     resendEmailId: emailId,
-    messageId: headers["message-id"] || emailId,
+    messageId: headers["message-id"] || emailContent.message_id || emailId,
     from,
     fromName,
     fromEmail,
@@ -574,11 +632,12 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
     cc: normalizedCc,
     bcc: normalizedBcc,
     subject: subject || "(Sin asunto)",
-    text: text || "",
-    html: html || "",
-    headers: headers,
+    text,
+    html,
+    body: html,
+    headers,
     attachments: attachmentsMeta,
-    receivedAt: admin.firestore.Timestamp.fromDate(new Date(createdAtString)),
+    receivedAt: admin.firestore.Timestamp.fromDate(receivedAt),
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     direction: "inbound",
@@ -591,57 +650,40 @@ exports.resendInboundWebhook = onRequest({ region: "us-central1", secrets: ["RES
 
   try {
     await docRef.set(emailDoc);
-
-    // Disparar la notificación push del correo recibido de forma asíncrona
-    sendNotificationToUser(userId, {
-      title: "Nuevo correo",
-      body: `${fromName || fromEmail}\n${subject}`,
-      data: {
-        type: "inbound_email",
-        emailId: emailId,
-        userId: userId,
-        senderName: fromName || fromEmail,
-        senderEmail: fromEmail,
-        subject: subject,
-        route: `/recibidos?open=${emailId}`
-      }
-    });
-
-    return res.status(200).json({ success: true, id: emailId });
-  } catch (saveError) {
+  } catch (error) {
+    logger.error("[RESEND INBOUND] No se pudo guardar el correo", error);
     return res.status(500).json({ error: "Failed to save email" });
   }
+
+  void sendNotificationToUser(userId, {
+    title: "Nuevo correo",
+    body: `${fromName || fromEmail}\n${subject}`,
+    data: {
+      type: "inbound_email",
+      emailId,
+      userId: userId || "",
+      senderName: fromName || fromEmail,
+      senderEmail: fromEmail,
+      subject,
+      route: `/recibidos?open=${emailId}`
+    }
+  });
+
+  return res.status(200).json({ success: true, id: emailId });
 });
 
-// Endpoint seguro para enviar notificaciones de prueba
 exports.sendTestPush = onRequest({ region: "us-central1" }, async (req, res) => {
-  const allowedOrigins = [
-    "http://localhost:5173",
-    "https://pixel-mail-a78f6.web.app",
-    "https://pixel-mail-a78f6.firebaseapp.com",
-    "https://mail.pixel.com.pe"
-  ];
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  applyCors(req, res, "POST, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.status(204).send("");
   }
-
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  const idToken = authHeader.split("Bearer ")[1];
-  let decodedToken;
-  try {
-    decodedToken = await admin.auth().verifyIdToken(idToken);
-  } catch (error) {
+  const decodedToken = await verifyFirebaseUser(req);
+  if (!decodedToken) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
@@ -651,87 +693,147 @@ exports.sendTestPush = onRequest({ region: "us-central1" }, async (req, res) => 
   }
 
   try {
-    const message = {
+    const response = await admin.messaging().send({
       token,
       data: {
         title: "¡Notificación de prueba exitosa!",
         body: "Felicidades, las notificaciones push de Pixel Mail están configuradas correctamente.",
         type: "test_notification"
       }
-    };
-
-    logger.log("[FCM TEST] Enviando push de prueba...");
-    const response = await admin.messaging().send(message);
+    });
     return res.status(200).json({ success: true, messageId: response });
-  } catch (e) {
-    logger.error("[FCM TEST FAIL]", e);
-    return res.status(500).json({ error: e.message });
+  } catch (error) {
+    logger.error("[FCM TEST] Falló el push de prueba", error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
-exports.getAttachment = onRequest({ region: "us-central1", secrets: ["RESEND_API_KEY"] }, async (req, res) => {
-  const allowedOrigins = [
-    "http://localhost:5173",
-    "https://pixel-mail-a78f6.web.app",
-    "https://pixel-mail-a78f6.firebaseapp.com",
-    "https://mail.pixel.com.pe"
-  ];
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+exports.getAttachment = onRequest({
+  region: "us-central1",
+  secrets: ["RESEND_API_KEY", "RESEND_RECEIVING_API_KEY"]
+}, async (req, res) => {
+  applyCors(req, res, "GET, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.status(204).send("");
   }
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  const decodedToken = await verifyFirebaseUser(req);
+  if (!decodedToken) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const idToken = authHeader.split("Bearer ")[1];
-  try {
-    await admin.auth().verifyIdToken(idToken);
-  } catch (error) {
-    return res.status(401).json({ error: "Unauthorized" });
+  const emailId = firstQueryValue(req.query.emailId);
+  const filename = firstQueryValue(req.query.filename);
+  const attachmentId = firstQueryValue(req.query.attachmentId);
+
+  if (!emailId || (!filename && !attachmentId)) {
+    return res.status(400).json({ error: "Missing emailId and attachment identifier" });
   }
 
-  const { emailId, filename } = req.query;
-  if (!emailId || !filename) {
-    return res.status(400).json({ error: "Missing emailId or filename" });
+  const sources = [];
+  if (process.env.RESEND_RECEIVING_API_KEY) {
+    const receivingResend = new Resend(process.env.RESEND_RECEIVING_API_KEY);
+    sources.push({ name: "received", api: receivingResend.emails.receiving.attachments });
+  }
+  if (process.env.RESEND_API_KEY) {
+    const sendingResend = new Resend(process.env.RESEND_API_KEY);
+    sources.push({ name: "sent", api: sendingResend.emails.attachments });
+  }
+
+  if (sources.length === 0) {
+    return res.status(500).json({ error: "Configuration Error" });
   }
 
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const emailData = await resend.emails.get(emailId);
-    const data = emailData.data || emailData;
+    let attachment = null;
+    let lastLookupError = null;
 
-    if (!data || !data.attachments) {
-      return res.status(404).json({ error: "Email or attachments not found" });
+    for (const source of sources) {
+      try {
+        if (attachmentId) {
+          const { data, error } = await source.api.get({ id: attachmentId, emailId });
+          if (!error && data) {
+            attachment = data;
+            break;
+          }
+          if (error) lastLookupError = error;
+        }
+
+        if (filename) {
+          const { data, error } = await source.api.list({ emailId });
+          if (error) {
+            lastLookupError = error;
+            continue;
+          }
+
+          const attachments = normalizeAttachmentList(data);
+          const match = attachments.find((item) => item.filename === filename);
+          if (match) {
+            // La lista ya incluye una URL firmada en SDKs actuales. Si no la
+            // incluyera, recuperar el detalle garantiza una URL descargable.
+            if (match.download_url || match.downloadUrl) {
+              attachment = match;
+            } else if (match.id) {
+              const detail = await source.api.get({ id: match.id, emailId });
+              if (!detail.error && detail.data) {
+                attachment = detail.data;
+              } else if (detail.error) {
+                lastLookupError = detail.error;
+              }
+            }
+            if (attachment) break;
+          }
+        }
+      } catch (lookupError) {
+        // Un ID puede pertenecer a un correo recibido o enviado. Probar la otra
+        // fuente antes de considerar el adjunto inexistente.
+        lastLookupError = lookupError;
+      }
     }
 
-    const attachment = data.attachments.find(att => att.filename === filename);
     if (!attachment) {
+      if (lastLookupError) {
+        logger.info("[RESEND ATTACHMENT] Adjunto no encontrado en fuentes disponibles", lastLookupError);
+      }
       return res.status(404).json({ error: "Attachment not found" });
     }
 
-    if (attachment.content) {
-      const buffer = Buffer.isBuffer(attachment.content)
-        ? attachment.content
-        : Buffer.from(attachment.content, 'base64');
-      res.setHeader('Content-Type', attachment.contentType || 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
-      return res.send(buffer);
-    } else if (attachment.url) {
-      return res.redirect(attachment.url);
-    } else {
+    const downloadUrl = attachment.download_url || attachment.downloadUrl;
+    if (!downloadUrl) {
       return res.status(404).json({ error: "Attachment content not available" });
     }
-  } catch (err) {
-    logger.error("[RESEND ATTACHMENT] Error fetching attachment", err);
-    return res.status(500).json({ error: err.message });
+
+    const downloadResponse = await fetch(downloadUrl);
+    if (!downloadResponse.ok) {
+      logger.warn(`[RESEND ATTACHMENT] CDN respondió ${downloadResponse.status}`);
+      return res.status(502).json({ error: "Attachment download failed" });
+    }
+
+    const buffer = Buffer.from(await downloadResponse.arrayBuffer());
+    const actualFilename = attachment.filename || filename || "adjunto";
+    const asciiFilename = actualFilename
+      .replace(/[\r\n"]/g, "_")
+      .replace(/[^\x20-\x7E]/g, "_");
+
+    res.setHeader(
+      "Content-Type",
+      attachment.content_type || downloadResponse.headers.get("content-type") || "application/octet-stream"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(actualFilename)}`
+    );
+    res.setHeader("Content-Length", String(buffer.length));
+    res.setHeader("Cache-Control", "private, max-age=300");
+    return res.send(buffer);
+  } catch (error) {
+    logger.error("[RESEND ATTACHMENT] Error obteniendo adjunto", error);
+    return res.status(500).json({ error: error.message });
   }
 });
+
+
