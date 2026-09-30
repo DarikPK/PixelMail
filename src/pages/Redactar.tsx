@@ -27,7 +27,7 @@ import { useToast } from '../contexts/ToastContext';
 import Editor from '../components/Editor';
 import AttachmentManager from '../components/AttachmentManager';
 import type { AttachmentItem } from '../components/AttachmentManager';
-import { Send as SendIcon, OpenInNew as OpenIcon } from '@mui/icons-material';
+import { Send as SendIcon, OpenInNew as OpenIcon, WhatsApp as WhatsAppIcon } from '@mui/icons-material';
 import type { Signature } from '../contexts/SignatureContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { applyScaleToHTML } from '../utils/signatureScaler';
@@ -170,6 +170,12 @@ const Redactar = () => {
   });
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const whatsappInputRef = useRef<HTMLInputElement>(null);
+  const [pendingImportFiles, setPendingImportFiles] = useState<File[]>([]);
+  const [importConversation, setImportConversation] = useState('');
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importSourceLabel, setImportSourceLabel] = useState('WhatsApp');
+  const [activeShareSession, setActiveShareSession] = useState<string | null>(null);
 
   const [addSignature, setAddSignature] = useState(true);
   const [insertedSignatureId, setInsertedSignatureId] = useState<string | null>(null);
@@ -208,6 +214,157 @@ const Redactar = () => {
   const handleUnlockInput = (event: React.FocusEvent<HTMLInputElement>) => {
     event.currentTarget.removeAttribute("readonly");
   };
+
+  const cleanupShareSession = async (sessionId: string | null) => {
+    if (!sessionId || !('caches' in window)) return;
+    try {
+      const cache = await caches.open('pixelmail-share-target-v1');
+      const metaKey = `/__pixelmail-share-meta/${sessionId}`;
+      const metaResponse = await cache.match(metaKey);
+      if (metaResponse) {
+        const metadata = await metaResponse.json();
+        const items = Array.isArray(metadata?.files) ? metadata.files : [];
+        await Promise.all(items.map((item: any) => cache.delete(item.cacheUrl)));
+      }
+      await cache.delete(metaKey);
+    } catch (error) {
+      console.warn('[PIXEL MAIL SHARE] No se pudo limpiar la sesión temporal', error);
+    }
+  };
+
+  const startImportValidation = (
+    files: File[],
+    sourceLabel = 'WhatsApp',
+    shareSession: string | null = null
+  ) => {
+    if (files.length === 0) return;
+
+    const currentBytes = attachments.reduce((total, item) => total + item.size, 0);
+    const incomingBytes = files.reduce((total, file) => total + file.size, 0);
+    const maxBytes = 10 * 1024 * 1024;
+
+    if (currentBytes + incomingBytes > maxBytes) {
+      setError('El tamaño total de los adjuntos no puede superar los 10 MB.');
+      void cleanupShareSession(shareSession);
+      return;
+    }
+
+    setPendingImportFiles(files);
+    setImportConversation('');
+    setImportSourceLabel(sourceLabel);
+    setActiveShareSession(shareSession);
+    setImportDialogOpen(true);
+  };
+
+  const confirmImport = async () => {
+    const conversation = importConversation.trim();
+    if (!conversation) {
+      setError('Confirma el nombre de la conversación de WhatsApp antes de adjuntar los archivos.');
+      return;
+    }
+
+    const sessionId = activeShareSession || crypto.randomUUID();
+    const importedItems: AttachmentItem[] = pendingImportFiles.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+      source: activeShareSession ? 'share' : 'whatsapp',
+      sourceSessionId: sessionId,
+      sourceLabel: `WhatsApp · ${conversation}`
+    }));
+
+    setAttachments((current) => [...current, ...importedItems]);
+    setImportDialogOpen(false);
+    setPendingImportFiles([]);
+    setImportConversation('');
+    setError('');
+
+    if (activeShareSession) {
+      await cleanupShareSession(activeShareSession);
+      setActiveShareSession(null);
+    }
+
+    showToast({
+      message: `${importedItems.length} archivo${importedItems.length === 1 ? '' : 's'} adjuntado${importedItems.length === 1 ? '' : 's'}`,
+      subtitle: `Conversación: ${conversation}`,
+      severity: 'success'
+    });
+  };
+
+  const cancelImport = async () => {
+    pendingImportFiles.forEach((file) => {
+      const possibleUrl = (file as any).previewUrl;
+      if (possibleUrl) URL.revokeObjectURL(possibleUrl);
+    });
+    setImportDialogOpen(false);
+    setPendingImportFiles([]);
+    setImportConversation('');
+    if (activeShareSession) {
+      await cleanupShareSession(activeShareSession);
+      setActiveShareSession(null);
+    }
+  };
+
+  useEffect(() => {
+    const shareSession = searchParams.get('shareSession');
+    const shareError = searchParams.get('shareError');
+
+    if (shareError === '1') {
+      setError('Android no pudo entregar los archivos compartidos. Intenta compartirlos nuevamente con Pixel Mail.');
+      return;
+    }
+
+    if (!shareSession || !('caches' in window)) return;
+
+    let cancelled = false;
+
+    const loadSharedFiles = async () => {
+      try {
+        const cache = await caches.open('pixelmail-share-target-v1');
+        const metaResponse = await cache.match(`/__pixelmail-share-meta/${shareSession}`);
+        if (!metaResponse) {
+          throw new Error('No se encontró la sesión de archivos compartidos');
+        }
+
+        const metadata = await metaResponse.json();
+        const items = Array.isArray(metadata?.files) ? metadata.files : [];
+        const sharedFiles: File[] = [];
+
+        for (const item of items) {
+          const response = await cache.match(item.cacheUrl);
+          if (!response) continue;
+          const blob = await response.blob();
+          sharedFiles.push(new File(
+            [blob],
+            item.name || 'archivo',
+            {
+              type: item.type || blob.type || 'application/octet-stream',
+              lastModified: item.lastModified || Date.now()
+            }
+          ));
+        }
+
+        if (cancelled) return;
+        if (sharedFiles.length === 0) {
+          throw new Error('No se recibieron archivos');
+        }
+
+        startImportValidation(sharedFiles, 'Compartido desde WhatsApp', shareSession);
+      } catch (error) {
+        console.error('[PIXEL MAIL SHARE] Error recuperando archivos compartidos', error);
+        setError('No se pudieron recuperar los archivos compartidos. Intenta compartirlos nuevamente.');
+        void cleanupShareSession(shareSession);
+      }
+    };
+
+    void loadSharedFiles();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
 
   // Cargar correo referenciado para responder/reenviar o cargar firma activa por defecto
   useEffect(() => {
@@ -578,6 +735,54 @@ const Redactar = () => {
 
   return (
     <Box sx={{ maxWidth: 900, mx: 'auto', animation: 'fadeIn 200ms ease-in-out' }}>
+      <Dialog open={importDialogOpen} onClose={() => void cancelImport()} fullWidth maxWidth="sm">
+        <DialogTitle sx={{ fontWeight: 'bold' }}>Validar conversación de WhatsApp</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+            Se recibieron {pendingImportFiles.length} archivo{pendingImportFiles.length === 1 ? '' : 's'} desde {importSourceLabel}.
+            Confirma de qué conversación provienen para mantener este lote separado y ordenado.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Conversación"
+            placeholder="Ej. Inversiones Ruiz"
+            value={importConversation}
+            onChange={(event) => setImportConversation(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && importConversation.trim()) {
+                event.preventDefault();
+                void confirmImport();
+              }
+            }}
+          />
+          <Box sx={{ mt: 2, maxHeight: 220, overflowY: 'auto' }}>
+            {pendingImportFiles.map((file, index) => (
+              <Typography
+                key={`${file.name}-${file.size}-${index}`}
+                variant="caption"
+                sx={{ display: 'block', py: 0.35, color: 'text.secondary' }}
+              >
+                • {file.name}
+              </Typography>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => void cancelImport()} sx={{ textTransform: 'none' }}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void confirmImport()}
+            disabled={!importConversation.trim() || pendingImportFiles.length === 0}
+            sx={{ textTransform: 'none', fontWeight: 'bold' }}
+          >
+            Adjuntar lote
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* DIÁLOGO ADVERTENCIA RECURSOS LOCALES/PENDIENTES */}
       <Dialog open={pendingAssetsDialogOpen} onClose={() => setPendingAssetsDialogOpen(false)}>
         <DialogTitle sx={{ fontWeight: 'bold', fontSize: '15px' }}>La firma contiene recursos pendientes</DialogTitle>
@@ -794,6 +999,37 @@ const Redactar = () => {
               content={message}
               onChange={(html) => setMessage(html)}
             />
+
+            <Box sx={{ display: { xs: 'flex', md: 'none' }, mt: 2, mb: 1 }}>
+              <input
+                ref={whatsappInputRef}
+                type="file"
+                multiple
+                hidden
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.jpg,.jpeg,.png,.webp,.zip,image/*,video/*,audio/*"
+                onChange={(event) => {
+                  const selected = Array.from(event.target.files || []);
+                  startImportValidation(selected, 'WhatsApp');
+                  event.currentTarget.value = '';
+                }}
+              />
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<WhatsAppIcon />}
+                onClick={() => whatsappInputRef.current?.click()}
+                disabled={sending}
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: '12px',
+                  py: 1.2,
+                  fontWeight: 'bold'
+                }}
+              >
+                Adjuntar varios desde WhatsApp
+              </Button>
+            </Box>
+
             <AttachmentManager
               files={attachments}
               onFilesChange={setAttachments}
