@@ -21,6 +21,9 @@ export interface AttachmentItem {
   type: string;
   size: number;
   previewUrl?: string;
+  source?: 'manual' | 'whatsapp' | 'share';
+  sourceSessionId?: string;
+  sourceLabel?: string;
 }
 
 interface AttachmentManagerProps {
@@ -156,7 +159,7 @@ const AttachmentManager = ({ files, onFilesChange, maxTotalSize = 10 * 1024 * 10
             >
               <ListItemText
                 primary={file.name}
-                secondary={formatSize(file.size)}
+                secondary={file.sourceLabel ? `${formatSize(file.size)} · ${file.sourceLabel}` : formatSize(file.size)}
                 slotProps={{
                   primary: { variant: 'body2', noWrap: true } as any
                 }}
