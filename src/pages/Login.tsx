@@ -10,7 +10,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -19,11 +19,13 @@ const Login = () => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const { login, user, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = (location.state as { from?: string } | null)?.from || '/redactar';
 
   // Redirigir si el usuario ya está autenticado o acaba de autenticarse
   useEffect(() => {
     if (!loading && user) {
-      navigate('/redactar', { replace: true });
+      navigate(returnTo, { replace: true });
     }
   }, [user, loading, navigate]);
 
@@ -63,7 +65,7 @@ const Login = () => {
             Inicia sesión para continuar
           </Typography>
           <Typography variant="caption" align="center" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-            versión 10.8
+            versión 10.9
           </Typography>
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
