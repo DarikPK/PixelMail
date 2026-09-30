@@ -78,7 +78,7 @@ export default defineConfig({
             purpose: 'maskable'
           }
         ]
-      },
+      } as any,
       workbox: {
         importScripts: ['share-target-sw.js'],
         cleanupOutdatedCaches: true,
