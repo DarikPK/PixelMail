@@ -285,6 +285,7 @@ const Redactar = () => {
     if (activeShareSession) {
       await cleanupShareSession(activeShareSession);
       setActiveShareSession(null);
+      navigate('/redactar', { replace: true });
     }
 
     showToast({
@@ -305,6 +306,7 @@ const Redactar = () => {
     if (activeShareSession) {
       await cleanupShareSession(activeShareSession);
       setActiveShareSession(null);
+      navigate('/redactar', { replace: true });
     }
   };
 
