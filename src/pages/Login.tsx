@@ -27,7 +27,7 @@ const Login = () => {
     if (!loading && user) {
       navigate(returnTo, { replace: true });
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, returnTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
