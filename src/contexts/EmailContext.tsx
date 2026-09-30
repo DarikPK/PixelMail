@@ -15,7 +15,9 @@ import {
   writeBatch,
   type DocumentData,
   type FirestoreError,
-  type QueryDocumentSnapshot
+  type Query,
+  type QueryDocumentSnapshot,
+  type QuerySnapshot
 } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 
@@ -539,7 +541,7 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
           await wait(BACKGROUND_BATCH_DELAY_MS);
           if (cancelled) return;
 
-          const historicalQuery = query(
+          const historicalQuery: Query<DocumentData> = query(
             emailsRef,
             where('userId', '==', user.uid),
             where('direction', '==', direction),
@@ -548,7 +550,7 @@ export const EmailProvider = ({ children }: { children: React.ReactNode }) => {
             limit(BACKGROUND_BATCH_SIZE)
           );
 
-          const snapshot = await getDocs(historicalQuery);
+          const snapshot: QuerySnapshot<DocumentData> = await getDocs(historicalQuery);
           if (cancelled || snapshot.empty) return;
 
           mergeEmailBatch(snapshot.docs.map(mapSnapshotToEmail));
