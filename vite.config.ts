@@ -23,6 +23,37 @@ export default defineConfig({
         background_color: '#0F1117',
         lang: 'es-PE',
         categories: ['productivity', 'business', 'utilities'],
+        share_target: {
+          action: '/share-target',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url',
+            files: [
+              {
+                name: 'files',
+                accept: [
+                  'image/*',
+                  'video/*',
+                  'audio/*',
+                  'application/pdf',
+                  'application/msword',
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                  'application/vnd.ms-excel',
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                  'application/vnd.ms-powerpoint',
+                  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                  'text/plain',
+                  'text/csv',
+                  'application/zip',
+                  'application/x-zip-compressed'
+                ]
+              }
+            ]
+          }
+        },
         icons: [
           {
             src: '/pwa-192x192.png',
@@ -49,6 +80,7 @@ export default defineConfig({
         ]
       },
       workbox: {
+        importScripts: ['share-target-sw.js'],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         // Debe permanecer en false: la activación la controla PwaUpdateContext.
@@ -56,6 +88,8 @@ export default defineConfig({
         navigateFallbackDenylist: [
           /^\/__/,
           /^\/api/,
+          /^\/share-target$/,
+          /^\/__pixelmail-share/,
           /https:\/\/firebasestorage\.googleapis\.com/,
           /https:\/\/firestore\.googleapis\.com/,
           /https:\/\/resend\.com/
