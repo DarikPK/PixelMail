@@ -7,6 +7,7 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { auth, db } from '../config/firebase';
+import { signInToPixelMailWithCentralIdentity } from '../services/centralIdentitySession';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface AuthContextType {
@@ -55,6 +56,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (email: string, password: string) => {
+    if (import.meta.env.VITE_PIXEL_IDENTITY_LOGIN_ENABLED === 'true') {
+      await signInToPixelMailWithCentralIdentity(email, password);
+      return;
+    }
     await signInWithEmailAndPassword(auth, email, password);
   };
 
