@@ -40,7 +40,7 @@ async function exchangeMailIdentity(req, res) {
 
   try {
     const uid = centralUser.uid;
-    const linkSnap = await admin.firestore().collection("identityLinks").doc(uid).get();
+    const linkSnap = await centralAuth().app.firestore().collection("identityLinksPixelMail").doc(uid).get();
     const link = linkSnap.data();
     if (!linkSnap.exists || link?.centralUid !== uid ||
         link?.legacyProject !== MAIL_PROJECT || link?.approved !== true ||
