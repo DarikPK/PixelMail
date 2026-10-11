@@ -1,0 +1,15 @@
+{
+  "functions": [
+    {
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ],
+      "source": "identityapi",
+      "runtime": "nodejs22",
+      "codebase": "identity-candidate"
+    }
+  ]
+}

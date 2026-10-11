@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "6.3.1"
+  },
+  "name": "pixelmail-identity-candidate",
+  "main": "index.js",
+  "private": true,
+  "type": "commonjs",
+  "version": "0.1.0",
+  "engines": {
+    "node": "22"
+  }
+}
