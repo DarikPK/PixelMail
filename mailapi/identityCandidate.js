@@ -1,6 +1,7 @@
 "use strict";
 
 const admin = require("firebase-admin");
+const { getFirestore } = require("firebase-admin/firestore");
 
 // Prepared for an isolated candidate. Not exported by mailapi/index.js:
 // deploying the mail functions cannot activate this module accidentally.
@@ -8,12 +9,12 @@ const CENTRAL_PROJECT = "pixel-resources";
 const MAIL_PROJECT = "pixel-mail-a78f6";
 const CENTRAL_APP_NAME = "pixelmail-central-identity";
 
-function centralAuth() {
+function centralApp() {
   let app = admin.apps.find((item) => item.name === CENTRAL_APP_NAME);
   if (!app) {
     app = admin.initializeApp({ projectId: CENTRAL_PROJECT }, CENTRAL_APP_NAME);
   }
-  return app.auth();
+  return app;
 }
 
 /**
@@ -33,14 +34,14 @@ async function exchangeMailIdentity(req, res) {
   }
   let centralUser;
   try {
-    centralUser = await centralAuth().verifyIdToken(header.slice(7), true);
+    centralUser = await centralApp().auth().verifyIdToken(header.slice(7), true);
   } catch {
     return res.status(401).json({ ok: false, error: "INVALID_IDENTITY" });
   }
 
   try {
     const uid = centralUser.uid;
-    const linkSnap = await centralAuth().app.firestore().collection("identityLinksPixelMail").doc(uid).get();
+    const linkSnap = await getFirestore(centralApp()).collection("identityLinksPixelMail").doc(uid).get();
     const link = linkSnap.data();
     if (!linkSnap.exists || link?.centralUid !== uid ||
         link?.legacyProject !== MAIL_PROJECT || link?.approved !== true ||
@@ -49,7 +50,7 @@ async function exchangeMailIdentity(req, res) {
       return res.status(403).json({ ok: false, error: "IDENTITY_NOT_LINKED" });
     }
 
-    const lockSnap = await centralAuth().app.firestore()
+    const lockSnap = await getFirestore(centralApp())
       .collection("identityLocksPixelMail").doc(link.legacyUid).get();
     const lock = lockSnap.data();
     if (!lockSnap.exists || lock?.centralUid !== uid || lock?.legacyUid !== link.legacyUid) {
