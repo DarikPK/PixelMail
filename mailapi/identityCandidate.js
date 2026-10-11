@@ -49,6 +49,13 @@ async function exchangeMailIdentity(req, res) {
       return res.status(403).json({ ok: false, error: "IDENTITY_NOT_LINKED" });
     }
 
+    const lockSnap = await centralAuth().app.firestore()
+      .collection("identityLocksPixelMail").doc(link.legacyUid).get();
+    const lock = lockSnap.data();
+    if (!lockSnap.exists || lock?.centralUid !== uid || lock?.legacyUid !== link.legacyUid) {
+      return res.status(403).json({ ok: false, error: "IDENTITY_LOCK_MISMATCH" });
+    }
+
     const mailUser = await admin.auth().getUser(link.legacyUid);
     const centralEmail = String(centralUser.email || "").trim().toLowerCase();
     const originalEmail = String(mailUser.email || "").trim().toLowerCase();
