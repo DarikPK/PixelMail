@@ -50,8 +50,13 @@ async function exchangeMailIdentity(req, res) {
     }
 
     const mailUser = await admin.auth().getUser(link.legacyUid);
-    if (mailUser.disabled || !mailUser.email ||
-        !centralUser.email || mailUser.email.toLowerCase() !== centralUser.email.toLowerCase()) {
+    const centralEmail = String(centralUser.email || "").trim().toLowerCase();
+    const originalEmail = String(mailUser.email || "").trim().toLowerCase();
+
+    // Both email addresses must be explicitly approved in the identity link.
+    if (mailUser.disabled || !centralEmail || !originalEmail ||
+        link.centralEmail !== centralEmail ||
+        link.legacyEmail !== originalEmail) {
       return res.status(403).json({ ok: false, error: "IDENTITY_ACCOUNT_MISMATCH" });
     }
 
